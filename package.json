@@ -4,7 +4,10 @@
   "description": "Typescript implementation of tinode js clinet",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc -p .",
+    "start": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "refresh": "rm -rf ./node_modules && npm install"
   },
   "repository": {
     "type": "git",
@@ -24,7 +27,9 @@
   },
   "homepage": "https://github.com/tinode/typescript-sdk#readme",
   "devDependencies": {
-    "tslint": "^5.12.1",
+    "nodemon": "^2.0.4",
+    "ts-node": "^8.10.2",
+    "tslint": "^5.20.1",
     "typescript": "^3.9.6"
   }
 }

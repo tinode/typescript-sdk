@@ -1,0 +1,30 @@
+{
+  "name": "tinode-sdk",
+  "version": "1.0.0",
+  "description": "Typescript implementation of tinode js clinet",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tinode/typescript-sdk.git"
+  },
+  "keywords": [
+    "ts",
+    "tinode",
+    "chat",
+    "sdk",
+    "js"
+  ],
+  "author": "Moein Hosseini",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/tinode/typescript-sdk/issues"
+  },
+  "homepage": "https://github.com/tinode/typescript-sdk#readme",
+  "devDependencies": {
+    "tslint": "^5.12.1",
+    "typescript": "^3.9.6"
+  }
+}

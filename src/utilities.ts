@@ -1,4 +1,5 @@
-import { base64codes, base64abc } from './constants';
+import { base64codes, base64abc, DEL_CHAR } from './constants';
+import { AccessMode } from './access-mode';
 
 function getBase64Code(charCode: number) {
     if (charCode >= base64codes.length) {
@@ -125,4 +126,56 @@ export function rfc3339DateString(date: Date): string {
     return date.getUTCFullYear() + '-' + pad(date.getUTCMonth() + 1) + '-' + pad(date.getUTCDate()) +
         'T' + pad(date.getUTCHours()) + ':' + pad(date.getUTCMinutes()) + ':' + pad(date.getUTCSeconds()) +
         (millisecond ? '.' + pad(millisecond, 3) : '') + 'Z';
+}
+
+/**
+ * Recursively merge src own properties to dst.
+ * Array and Date objects are shallow-copied.
+ * @param dst - Destination object
+ * @param src - Source object
+ * @param ignore Ignore properties where ignore[property] is true.
+ */
+export function mergeObj(dst: any, src: any, ignore = false) {
+    if (typeof src !== 'object') {
+        if (src === DEL_CHAR) {
+            return undefined;
+        }
+        if (src === undefined) {
+            return dst;
+        }
+        return src;
+    }
+    // JS is crazy: typeof null is 'object'.
+    if (src === null) {
+        return src;
+    }
+
+    // Handle Date
+    if (src instanceof Date) {
+        return (!dst || !(dst instanceof Date) || dst < src) ? src : dst;
+    }
+
+    // Access mode
+    if (src instanceof AccessMode) {
+        return new AccessMode(src);
+    }
+
+    // Handle Array
+    if (src instanceof Array) {
+        return src;
+    }
+
+    if (!dst || dst === DEL_CHAR) {
+        dst = src.constructor();
+    }
+
+    for (const prop in src) {
+        if (src.hasOwnProperty(prop) &&
+            (!ignore || !ignore[prop]) &&
+            (prop !== '_noForwarding')) {
+
+            dst[prop] = mergeObj(dst[prop], src[prop]);
+        }
+    }
+    return dst;
 }

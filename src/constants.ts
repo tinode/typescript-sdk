@@ -84,3 +84,31 @@ export const base64codes = [
     255, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
     41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51
 ];
+
+export const DEL_CHAR = '\u2421';
+
+/**
+ * Access mode permission types
+ */
+export enum AccessModeFlags {
+    NONE = 0x00,
+    JOIN = 0x01,
+    READ = 0x02,
+    WRITE = 0x04,
+    PRES = 0x08,
+    APPROVE = 0x10,
+    SHARE = 0x20,
+    DELETE = 0x40,
+    OWNER = 0x80,
+    INVALID = 0x100000,
+}
+
+export const AccessModePermissionsBITMASK =
+    AccessModeFlags.JOIN
+    | AccessModeFlags.READ
+    | AccessModeFlags.WRITE
+    | AccessModeFlags.PRES
+    | AccessModeFlags.APPROVE
+    | AccessModeFlags.SHARE
+    | AccessModeFlags.DELETE
+    | AccessModeFlags.OWNER;

@@ -103,7 +103,7 @@ export function initializeNetworkProviders(ws: any, xmlhttprequest: any): void {
             NetworkProviders.XMLHTTPRequest = XMLHttpRequest;
         }
     } else {
-        NetworkProviders.XMLHTTPRequest = ws;
+        NetworkProviders.WebSocket = ws;
         NetworkProviders.XMLHTTPRequest = xmlhttprequest;
     }
 }

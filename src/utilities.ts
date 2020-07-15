@@ -179,3 +179,66 @@ export function mergeObj(dst: any, src: any, ignore = false) {
     }
     return dst;
 }
+
+/**
+ * Update object stored in a cache. Returns updated value.
+ */
+export function mergeToCache(cache: any, key: string, newValue: any, ignore: boolean) {
+    cache[key] = mergeObj(cache[key], newValue, ignore);
+    return cache[key];
+}
+
+export function stringToDate(obj: any): void {
+    if (typeof obj.created === 'string') {
+        obj.created = new Date(obj.created);
+    }
+    if (typeof obj.updated === 'string') {
+        obj.updated = new Date(obj.updated);
+    }
+    if (typeof obj.touched === 'string') {
+        obj.touched = new Date(obj.touched);
+    }
+}
+
+/**
+ * JSON stringify helper - pre-processor for JSON.stringify
+ */
+export function jsonBuildHelper(key: any, val: any) {
+    if (val instanceof Date) {
+        // Convert javascript Date objects to rfc3339 strings
+        val = rfc3339DateString(val);
+    } else if (val instanceof AccessMode) {
+        val = val.jsonHelper();
+    } else if (val === undefined || val === null || val === false ||
+        (Array.isArray(val) && val.length === 0) ||
+        ((typeof val === 'object') && (Object.keys(val).length === 0))) {
+        // strip out empty elements while serializing objects to JSON
+        return undefined;
+    }
+    return val;
+}
+
+/**
+ * Strips all values from an object of they evaluate to false or if their name starts with '_'.
+ */
+export function simplify(obj: any) {
+    Object.keys(obj).forEach((key) => {
+        if (key[0] === '_') {
+            // Strip fields like "obj._key".
+            delete obj[key];
+        } else if (!obj[key]) {
+            // Strip fields which evaluate to false.
+            delete obj[key];
+        } else if (Array.isArray(obj[key]) && obj[key].length === 0) {
+            // Strip empty arrays.
+            delete obj[key];
+        } else if (typeof obj[key] === 'object' && !(obj[key] instanceof Date)) {
+            simplify(obj[key]);
+            // Strip empty objects.
+            if (Object.getOwnPropertyNames(obj[key]).length === 0) {
+                delete obj[key];
+            }
+        }
+    });
+    return obj;
+}

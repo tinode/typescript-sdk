@@ -242,3 +242,146 @@ export function simplify(obj: any) {
     });
     return obj;
 }
+
+/**
+ * Trim whitespace, strip empty and duplicate elements elements.
+ * If the result is an empty array, add a single element "\u2421" (Unicode Del character).
+ * @param arr - array value
+ */
+export function normalizeArray(arr: any[]) {
+    let out = [];
+    if (Array.isArray(arr)) {
+        // Trim, throw away very short and empty tags.
+        for (let i = 0, l = arr.length; i < l; i++) {
+            let t = arr[i];
+            if (t) {
+                t = t.trim().toLowerCase();
+                if (t.length > 1) {
+                    out.push(t);
+                }
+            }
+        }
+        out.sort();
+        out = out.filter((item, pos, ary) => {
+            return !pos || item !== ary[pos - 1];
+        });
+    }
+    if (out.length === 0) {
+        // Add single tag with a Unicode Del character, otherwise an empty array
+        // is ambiguous. The Del tag will be stripped by the server.
+        out.push(DEL_CHAR);
+    }
+    return out;
+}
+
+/**
+ * Attempt to convert date strings to objects.
+ */
+export function jsonParseHelper(key: string, val: any) {
+    // Convert string timestamps with optional milliseconds to Date
+    // 2015-09-02T01:45:43[.123]Z
+    if (key === 'ts' && typeof val === 'string' &&
+        val.length >= 20 && val.length <= 24) {
+        const date = new Date(val);
+        if (date) {
+            return date;
+        }
+    } else if (key === 'acs' && typeof val === 'object') {
+        return new AccessMode(val);
+    }
+    return val;
+}
+
+/**
+ * Trims very long strings (encoded images) to make logged packets more readable.
+ */
+export function jsonLoggerHelper(key: string, val: any) {
+    if (typeof val === 'string' && val.length > 128) {
+        return '<' + val.length + ', bytes: ' + val.substring(0, 12) + '...' + val.substring(val.length - 12) + '>';
+    }
+    return jsonBuildHelper(key, val);
+}
+
+/**
+ * Parse browser user agent to extract browser name and version.
+ */
+export function getBrowserInfo(ua: string, product) {
+    ua = ua || '';
+    let reactnative = '';
+    // Check if this is a ReactNative app.
+    if (/reactnative/i.test(product)) {
+        reactnative = 'ReactNative; ';
+    }
+    // Then test for WebKit based browser.
+    ua = ua.replace(' (KHTML, like Gecko)', '');
+    let m = ua.match(/(AppleWebKit\/[.\d]+)/i);
+    let result;
+    if (m) {
+        // List of common strings, from more useful to less useful.
+        const priority = ['chrome', 'safari', 'mobile', 'version'];
+        const tmp = ua.substr(m.index + m[0].length).split(' ');
+        const tokens = [];
+        // Split Name/0.0.0 into Name and version 0.0.0
+        for (const item of tmp) {
+            const m2 = /([\w.]+)[\/]([\.\d]+)/.exec(item);
+            if (m2) {
+                tokens.push([m2[1], m2[2], priority.findIndex((e) => {
+                    return (e === m2[1].toLowerCase());
+                })]);
+            }
+        }
+        // Sort by priority: more interesting is earlier than less interesting.
+        tokens.sort((a, b) => {
+            const diff = a[2] - b[2];
+            return diff !== 0 ? diff : b[0].length - a[0].length;
+        });
+        if (tokens.length > 0) {
+            // Return the least common browser string and version.
+            result = tokens[0][0] + '/' + tokens[0][1];
+        } else {
+            // Failed to ID the browser. Return the webkit version.
+            result = m[1];
+        }
+        // Test for MSIE.
+    } else if (/trident/i.test(ua)) {
+        m = /(?:\brv[ :]+([.\d]+))|(?:\bMSIE ([.\d]+))/g.exec(ua);
+        if (m) {
+            result = 'MSIE/' + (m[1] || m[2]);
+        } else {
+            result = 'MSIE/?';
+        }
+        // Test for Firefox.
+    } else if (/firefox/i.test(ua)) {
+        m = /Firefox\/([.\d]+)/g.exec(ua);
+        if (m) {
+            result = 'Firefox/' + m[1];
+        } else {
+            result = 'Firefox/?';
+        }
+        // Older Opera.
+    } else if (/presto/i.test(ua)) {
+        m = /Opera\/([.\d]+)/g.exec(ua);
+        if (m) {
+            result = 'Opera/' + m[1];
+        } else {
+            result = 'Opera/?';
+        }
+    } else {
+        // Failed to parse anything meaningful. Try the last resort.
+        m = /([\w.]+)\/([.\d]+)/.exec(ua);
+        if (m) {
+            result = m[1] + '/' + m[2];
+        } else {
+            m = ua.split(' ');
+            result = m[0];
+        }
+    }
+
+    // Shorten the version to one dot 'a.bb.ccc.d -> a.bb' at most.
+    m = result.split('/');
+    if (m.length > 1) {
+        const v = m[1].split('.');
+        result = m[0] + '/' + v[0] + (v[1] ? '.' + v[1] : '');
+    }
+    return reactnative + result;
+}

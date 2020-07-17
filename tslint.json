@@ -16,6 +16,7 @@
             "timeEnd",
             "trace"
         ],
+        "no-duplicate-variable": true,
         "no-bitwise": false,
         "no-empty": false,
         "interface-name": false,

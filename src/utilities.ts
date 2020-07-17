@@ -385,3 +385,55 @@ export function getBrowserInfo(ua: string, product) {
     }
     return reactnative + result;
 }
+
+export function findNearest(elem, arr: any[], exact: boolean, compare?: CallableFunction) {
+    if (!compare) {
+        compare = (a: any, b: any) => {
+            return a === b ? 0 : a < b ? -1 : 1;
+        };
+    }
+
+    let start = 0;
+    let end = arr.length - 1;
+    let pivot = 0;
+    let diff = 0;
+    let found = false;
+
+    while (start <= end) {
+        pivot = (start + end) / 2 | 0;
+        diff = compare(arr[pivot], elem);
+        if (diff < 0) {
+            start = pivot + 1;
+        } else if (diff > 0) {
+            end = pivot - 1;
+        } else {
+            found = true;
+            break;
+        }
+    }
+    if (found) {
+        return {
+            idx: pivot,
+            exact: true
+        };
+    }
+    if (exact) {
+        return {
+            idx: -1
+        };
+    }
+    // Not exact - insertion point
+    return {
+        idx: diff < 0 ? pivot + 1 : pivot
+    };
+}
+
+/**
+ * Insert element into a sorted array.
+ */
+export function insertSorted(elem: any, arr: any[], unique: boolean, compare?: CallableFunction) {
+    const found = findNearest(elem, arr, false, compare);
+    const count = (found.exact && unique) ? 1 : 0;
+    arr.splice(found.idx, count, elem);
+    return arr;
+}

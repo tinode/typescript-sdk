@@ -1,4 +1,4 @@
-import { base64codes, base64abc, DEL_CHAR } from './constants';
+import { base64codes, base64abc, DEL_CHAR, AppInfo } from './constants';
 import { AccessMode } from './access-mode';
 
 function getBase64Code(charCode: number) {
@@ -436,4 +436,28 @@ export function insertSorted(elem: any, arr: any[], unique: boolean, compare?: C
     const count = (found.exact && unique) ? 1 : 0;
     arr.splice(found.idx, count, elem);
     return arr;
+}
+
+/**
+ * Helper function for creating an endpoint URL
+ */
+export function makeBaseUrl(host: string, protocol: string, apiKey: string) {
+    let url = null;
+
+    if (protocol === 'http' || protocol === 'https' || protocol === 'ws' || protocol === 'wss') {
+        url = protocol + '://';
+        url += host;
+        if (url.charAt(url.length - 1) !== '/') {
+            url += '/';
+        }
+        url += 'v' + AppInfo.PROTOCOL_VERSION + '/channels';
+        if (protocol === 'http' || protocol === 'https') {
+            // Long polling endpoint end with "lp", i.e.
+            // '/v0/channels/lp' vs just '/v0/channels' for ws
+            url += '/lp';
+        }
+        url += '?apikey=' + apiKey;
+    }
+
+    return url;
 }

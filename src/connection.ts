@@ -1,4 +1,11 @@
+import { Subject } from 'rxjs';
+import { log } from './utilities';
+
 export type Transport = 'ws' | 'wss' | 'lp';
+export interface AutoReconnectData {
+    timeout: number;
+    promise?: Promise<any>;
+}
 
 /**
  * An abstraction for a websocket or a long polling connection.
@@ -14,25 +21,27 @@ export class Connection {
      * Settings for exponential backoff
      * 2000 milliseconds, minimum delay between reconnects
      */
-    private _BOFF_BASE = 2000;
+    private BOFF_BASE = 2000;
     /**
      * Settings for exponential backoff
      * Maximum delay between reconnects 2^10 * 2000 ~ 34 minutes
      */
-    private _BOFF_MAX_ITER = 10;
+    private BOFF_MAX_ITER = 10;
     /**
      * Settings for exponential backoff
      * Add random delay
      */
-    private _BOFF_JITTER = 0.3;
+    private BOFF_JITTER = 0.3;
 
-    private _BOFF_TIMER = null;
-    private _BOFF_ITERATION = 0;
+    private boffTimer = null;
+    private boffIteration = 0;
     /**
      *  Indicator if the socket was manually closed - don't autoReconnect if true.
      */
-    private _BOFF_CLOSED = false;
+    private boffClosed = false;
 
+    // Events
+    onAutoReconnectIteration = new Subject<AutoReconnectData>();
 
     /**
      * @param host - Host name and port number to connect to.
@@ -47,5 +56,35 @@ export class Connection {
         this.secure = secure;
         this.transport = transport;
         this.autoReconnect = autoReconnect;
+    }
+
+    /**
+     * Backoff implementation - reconnect after a timeout.
+     */
+    boffReconnect(): void {
+        // Clear timer
+        clearTimeout(this.boffTimer);
+        // Calculate when to fire the reconnect attempt
+        const timeout = this.BOFF_BASE * (Math.pow(2, this.boffIteration) * (1.0 + this.BOFF_JITTER * Math.random()));
+        // Update iteration counter for future use
+        if (this.boffIteration < this.BOFF_MAX_ITER) {
+            this.boffIteration = this.boffIteration + 1;
+        }
+        this.onAutoReconnectIteration.next({ timeout });
+
+        this.boffTimer = setTimeout(() => {
+            log('Reconnecting, iter=' + this.boffIteration + ', timeout=' + timeout);
+            // Maybe the socket was closed while we waited for the timer?
+            if (!this.boffClosed) {
+                const prom = this.connect();
+                this.onAutoReconnectIteration.next({ timeout: 0, promise: prom });
+            } else {
+                this.onAutoReconnectIteration.next({ timeout: -1 });
+            }
+        }, timeout);
+    }
+
+    connect(): any {
+        // TODO: implement
     }
 }

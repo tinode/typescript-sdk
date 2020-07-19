@@ -461,3 +461,7 @@ export function makeBaseUrl(host: string, protocol: string, apiKey: string) {
 
     return url;
 }
+
+export function log(text: string, ...args: any[]) {
+    // TODO: Implement
+}

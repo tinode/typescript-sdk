@@ -1,10 +1,15 @@
+import { log, makeBaseUrl, NetworkProviders } from './utilities';
+import { AppSettings } from './constants';
 import { Subject } from 'rxjs';
-import { log } from './utilities';
 
 export type Transport = 'ws' | 'wss' | 'lp';
 export interface AutoReconnectData {
     timeout: number;
     promise?: Promise<any>;
+}
+export interface OnDisconnetData {
+    error: Error;
+    code: number;
 }
 
 /**
@@ -39,8 +44,15 @@ export class Connection {
      *  Indicator if the socket was manually closed - don't autoReconnect if true.
      */
     private boffClosed = false;
+    private socket = null;
+    private sender = null;
+    private poller = null;
+    private lpURL = null;
 
     // Events
+    onOpen = new Subject<void>();
+    onMessage = new Subject<any>();
+    onDisconnect = new Subject<OnDisconnetData>();
     onAutoReconnectIteration = new Subject<AutoReconnectData>();
 
     /**
@@ -56,6 +68,21 @@ export class Connection {
         this.secure = secure;
         this.transport = transport;
         this.autoReconnect = autoReconnect;
+    }
+
+    /**
+     * Terminate auto-reconnect process.
+     */
+    private boffStop() {
+        clearTimeout(this.boffTimer);
+        this.boffTimer = 0;
+    }
+
+    /**
+     * Reset auto-reconnect iteration counter.
+     */
+    private boffReset() {
+        this.boffIteration = 0;
     }
 
     /**
@@ -84,7 +111,129 @@ export class Connection {
         }, timeout);
     }
 
-    connect(): any {
-        // TODO: implement
+    /**
+     * Initiate a new connection
+     * @param host - Host name to connect to; if null the old host name will be used.
+     * @param force - Force new connection even if one already exists.
+     */
+    connect(host?: string, force?: boolean): Promise<any> {
+        if (this.transport === 'ws' || this.transport === 'wss') {
+            return this.connectWs(host, force);
+        }
+        if (this.transport === 'lp') {
+            return this.connectLp(host, force);
+        }
+    }
+
+    /**
+     * Initiate a new connection
+     * Returns Promise resolved/rejected when the connection call completes, resolution is called without parameters,
+     * rejection passes the {Error} as parameter.
+     * @param host - Host name to connect to; if null the old host name will be used.
+     * @param force - Force new connection even if one already exists.
+     */
+    private connectWs(host: string, force: boolean): Promise<any> {
+        this.boffClosed = false;
+
+        if (this.socket) {
+            if (!force && this.socket.readyState === this.socket.OPEN) {
+                return Promise.resolve();
+            }
+            this.socket.close();
+            this.socket = null;
+        }
+
+        if (host) {
+            this.host = host;
+        }
+
+        return new Promise((resolve, reject) => {
+            const url = makeBaseUrl(this.host, this.secure ? 'wss' : 'ws', this.apiKey);
+            log('Connecting to: ', url);
+            const conn = new NetworkProviders.WebSocket(url);
+
+            conn.onerror = (err) => {
+                reject(err);
+            };
+
+            conn.onopen = (() => {
+                if (this.autoReconnect) {
+                    this.boffStop();
+                }
+                this.onOpen.next();
+                resolve();
+            }).bind(this);
+
+            conn.onclose = (() => {
+                this.socket = null;
+                const code = this.boffClosed ? AppSettings.NETWORK_USER : AppSettings.NETWORK_ERROR;
+                const error = new Error(this.boffClosed ? AppSettings.NETWORK_USER_TEXT : AppSettings.ERROR_TEXT + ' (' + code + ')');
+                this.onDisconnect.next({ error, code });
+                if (!this.boffClosed && this.autoReconnect) {
+                    this.boffReconnect();
+                }
+            }).bind(this);
+
+            conn.onmessage = ((evt: any) => {
+                this.onMessage.next(evt.data);
+            }).bind(this);
+            this.socket = conn;
+        });
+    }
+
+    /**
+     * Initiate long polling connection connection
+     * @param host - Host name to connect to; if null the old host name will be used.
+     * @param force - Force new connection even if one already exists.
+     */
+    private connectLp(host: string, force: boolean): Promise<any> {
+        // TODO: Implement
+        return;
+    }
+
+    reconnect(force: boolean) {
+        this.boffStop();
+        this.connect(null, force);
+    }
+
+    disconnect() {
+        if (this.transport === 'ws' || this.transport === 'wss') {
+            this.disconnectWs();
+        }
+        if (this.transport === 'lp') {
+            this.disconnectLp();
+        }
+    }
+
+    private disconnectWs() {
+        this.boffClosed = true;
+        if (!this.socket) {
+            return;
+        }
+
+        this.boffStop();
+        this.socket.close();
+        this.socket = null;
+    }
+
+    private disconnectLp() {
+        this.boffClosed = true;
+        this.boffStop();
+
+        if (this.sender) {
+            this.sender.onreadystatechange = undefined;
+            this.sender.abort();
+            this.sender = null;
+        }
+        if (this.poller) {
+            this.poller.onreadystatechange = undefined;
+            this.poller.abort();
+            this.poller = null;
+        }
+
+        const error = new Error(AppSettings.NETWORK_USER_TEXT + ' (' + AppSettings.NETWORK_USER + ')');
+        this.onDisconnect.next({ error, code: AppSettings.NETWORK_USER });
+        // Ensure it's reconstructed
+        this.lpURL = null;
     }
 }

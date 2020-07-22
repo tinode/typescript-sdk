@@ -1,5 +1,5 @@
-import { log, makeBaseUrl, NetworkProviders } from './utilities';
-import { AppSettings } from './constants';
+import { log, makeBaseUrl, NetworkProviders, jsonParseHelper } from './utilities';
+import { AppSettings, XDRStatus } from './constants';
 import { Subject } from 'rxjs';
 
 export type Transport = 'ws' | 'wss' | 'lp';
@@ -187,8 +187,82 @@ export class Connection {
      * @param force - Force new connection even if one already exists.
      */
     private connectLp(host: string, force: boolean): Promise<any> {
-        // TODO: Implement
-        return;
+        this.boffClosed = false;
+
+        if (this.poller) {
+            if (!force) {
+                return Promise.resolve();
+            }
+            this.poller.onreadystatechange = undefined;
+            this.poller.abort();
+            this.poller = null;
+        }
+
+        if (host) {
+            this.host = host;
+        }
+
+        return new Promise((resolve, reject) => {
+            const url = makeBaseUrl(this.host, this.secure ? 'https' : 'http', this.apiKey);
+            log('Connecting to: ', url);
+            this.poller = this.lpPoller(url, resolve, reject);
+            this.poller.send(null);
+        }).catch((err) => {
+            console.log('LP connection failed:', err);
+        });
+    }
+
+    private lpPoller(url: string, resolve?: any, reject?: any) {
+        let poller = new NetworkProviders.XMLHTTPRequest();
+        let promiseCompleted = false;
+
+        poller.onreadystatechange = ((evt: any) => {
+            if (poller.readyState === XDRStatus.DONE) {
+                if (poller.status === 201) { // 201 == HTTP.Created, get SID
+                    const pkt = JSON.parse(poller.responseText, jsonParseHelper);
+                    this.lpURL = url + '&sid=' + pkt.ctrl.params.sid;
+                    poller = this.lpPoller(this.lpURL);
+                    poller.send(null);
+                    this.onOpen.next();
+
+                    if (resolve) {
+                        promiseCompleted = true;
+                        resolve();
+                    }
+
+                    if (this.autoReconnect) {
+                        this.boffStop();
+                    }
+                }
+            } else if (poller.status < 400) { // 400 = HTTP.BadRequest
+                this.onMessage.next(poller.responseText);
+                this.poller = this.lpPoller(this.lpURL);
+                this.poller.send(null);
+            } else {
+                // Don't throw an error here, gracefully handle server errors
+                if (reject && !promiseCompleted) {
+                    promiseCompleted = true;
+                    reject(poller.responseText);
+                }
+
+                if (poller.responseText) {
+                    this.onMessage.next(poller.responseText);
+                }
+
+                const code = poller.status || (this.boffClosed ? AppSettings.NETWORK_USER : AppSettings.NETWORK_ERROR);
+                const text = poller.responseText || (this.boffClosed ? AppSettings.NETWORK_USER_TEXT : AppSettings.ERROR_TEXT);
+                this.onDisconnect.next({ error: new Error(text + ' (' + code + ')'), code });
+
+                // Polling has stopped. Indicate it by setting poller to null.
+                poller = null;
+                if (!this.boffClosed && this.autoReconnect) {
+                    this.boffReconnect();
+                }
+            }
+        }).bind(this);
+
+        poller.open('GET', this.lpURL, true);
+        return poller;
     }
 
     reconnect(force: boolean) {

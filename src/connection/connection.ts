@@ -1,5 +1,5 @@
-import { ConnectionOptions, BackoffSettings, AutoReconnectData, OnDisconnetData } from './connection-options';
-import { log } from '../utilities';
+import { ConnectionOptions, BackoffSettings, AutoReconnectData, OnDisconnetData, Transport } from './connection-options';
+import { log, NetworkProviders } from '../utilities';
 import { Subject } from 'rxjs';
 
 /**
@@ -31,10 +31,21 @@ export abstract class Connection {
      */
     protected boffClosed = false;
 
-    // Events
+    /**
+     * Will be emitted when connection opens
+     */
     onOpen = new Subject<void>();
+    /**
+     * Will be emitted when a message is received
+     */
     onMessage = new Subject<any>();
+    /**
+     * Will be emitted on connection disconnect
+     */
     onDisconnect = new Subject<OnDisconnetData>();
+    /**
+     * Will be emitted when connection tries to reconnect automatically
+     */
     onAutoReconnectIteration = new Subject<AutoReconnectData>();
 
     constructor(config: ConnectionOptions, backoffSettings?: BackoffSettings) {
@@ -42,6 +53,13 @@ export abstract class Connection {
         if (backoffSettings) {
             this.backoffSettings = backoffSettings;
         }
+    }
+
+    /**
+     * Returns connection transport method
+     */
+    get transport(): Transport {
+        return this.config.transport;
     }
 
     /**
@@ -79,13 +97,64 @@ export abstract class Connection {
     }
 
     /**
+     * Try to restore a network connection, also reset backoff.
+     * @param force - reconnect even if there is a live connection already.
+     */
+    protected reconnect(force?: boolean) {
+        this.backoffStop();
+        this.connect(null, force);
+    }
+
+    /**
+     * Send a message to test
+     */
+    protected probe() {
+        this.sendText('1');
+    }
+
+    /**
+     * Check if the given network transport is available.
+     * @param transport - either 'ws' (websocket) or 'lp' (long polling).
+     */
+    protected transportAvailable(transport: string): any {
+        switch (transport) {
+            case 'ws':
+                return NetworkProviders.WebSocket;
+            case 'lp':
+                return NetworkProviders.XMLHTTPRequest;
+            default:
+                console.log('Request for unknown transport', transport);
+                return false;
+        }
+    }
+
+    /**
+     * Reset auto reconnect counter to zero.
+     */
+    protected backoffReset(): void {
+        this.backoffReset();
+    }
+
+    /**
      * Initiate a new connection
      * @param host - Host name to connect to; if null the old host name will be used.
      * @param force - Force new connection even if one already exists.
      */
     abstract connect(host?: string, force?: boolean): Promise<any>;
+
     /**
      * Disconnect this connection
      */
     abstract disconnect(): void;
+
+    /**
+     * Send a string to the server.
+     * @param msg - String to send.
+     */
+    abstract sendText(msg: string): void;
+
+    /**
+     * Check if current connection exists
+     */
+    abstract isConnected(): boolean;
 }

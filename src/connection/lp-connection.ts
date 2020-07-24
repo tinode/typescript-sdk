@@ -4,8 +4,8 @@ import { XDRStatus, AppSettings } from '../constants';
 import { Connection } from './connection';
 
 export class LPConnection extends Connection {
-    private poller = null;
-    private sender = null;
+    private poller: XMLHttpRequest = null;
+    private sender: XMLHttpRequest = null;
     private LP_URL = null;
 
     constructor(options: ConnectionOptions) {
@@ -103,6 +103,23 @@ export class LPConnection extends Connection {
     }
 
     /**
+     * Returns a http request to send data
+     * @param url - Target URL
+     */
+    private LPSender(url: string) {
+        const sender = NetworkProviders.XMLHTTPRequest();
+        sender.onreadystatechange = (evt) => {
+            if (sender.readyState === XDRStatus.DONE && sender.status >= 400) {
+                // Some sort of error response
+                throw new Error('LP sender failed, ' + sender.status);
+            }
+        };
+
+        sender.open('POST', url, true);
+        return sender;
+    }
+
+    /**
      * Disconnect this connection
      */
     disconnect() {
@@ -124,5 +141,25 @@ export class LPConnection extends Connection {
         this.onDisconnect.next({ error, code: AppSettings.NETWORK_USER });
         // Ensure it's reconstructed
         this.LP_URL = null;
+    }
+
+    /**
+     * Send a string to the server.
+     * @param msg - String to send.
+     */
+    sendText(msg: string) {
+        this.sender = this.LPSender(this.LP_URL);
+        if (this.sender && (this.sender.readyState === this.sender.OPENED)) {
+            this.sender.send(msg);
+        } else {
+            throw new Error('Long poller failed to connect');
+        }
+    }
+
+    /**
+     * Check if current connection exists
+     */
+    isConnected(): boolean {
+        return (this.poller && true);
     }
 }

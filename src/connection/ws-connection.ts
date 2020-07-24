@@ -79,4 +79,23 @@ export class WSConnection extends Connection {
         this.socket.close();
         this.socket = null;
     }
+
+    /**
+     * Send a string to the server.
+     * @param msg - String to send.
+     */
+    sendText(msg: string) {
+        if (this.socket && (this.socket.readyState === this.socket.OPEN)) {
+            this.socket.send(msg);
+        } else {
+            throw new Error('Websocket is not connected');
+        }
+    }
+
+    /**
+     * Check if current connection exists
+     */
+    isConnected(): boolean {
+        return (this.socket && (this.socket.readyState === this.socket.OPEN));
+    }
 }

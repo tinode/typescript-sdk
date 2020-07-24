@@ -30,6 +30,10 @@ export abstract class Connection {
      *  Indicator if the socket was manually closed - don't autoReconnect if true.
      */
     protected boffClosed = false;
+    /**
+     * A callback to report logging events.
+     */
+    public logger = null;
 
     /**
      * Will be emitted when connection opens

@@ -1,7 +1,7 @@
 /**
  * Available transport methods
  */
-export type Transport = 'ws' | 'wss' | 'lp';
+export type Transport = 'ws' | 'lp';
 
 /**
  * Information needed to create an instance of connection

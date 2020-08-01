@@ -1,8 +1,19 @@
 import { ConnectionOptions, Connection, LPConnection, WSConnection } from './connection';
 import { getBrowserInfo, mergeObj } from './utilities';
-import { AppSettings, AppInfo } from './constants';
 import { Packet, PacketTypes } from './models/packet';
-import { HiPacketData, AccPacketData, LoginPacketData } from './models/packet-data';
+import { AppSettings, AppInfo } from './constants';
+import {
+    HiPacketData,
+    AccPacketData,
+    SubPacketData,
+    PubPacketData,
+    GetPacketData,
+    SetPacketData,
+    DelPacketData,
+    NotePacketData,
+    LeavePacketData,
+    LoginPacketData,
+} from './models/packet-data';
 
 export class Tinode {
     /**
@@ -319,6 +330,73 @@ export class Tinode {
                     secret: null,
                 };
                 return new Packet(type, loginData);
+
+            case PacketTypes.Sub:
+                const subData: SubPacketData = {
+                    id: this.getNextUniqueId(),
+                    topic,
+                    set: {},
+                    get: {},
+                };
+                return new Packet(type, subData);
+
+            case PacketTypes.Leave:
+                const leaveData: LeavePacketData = {
+                    id: this.getNextUniqueId(),
+                    topic,
+                    unsub: false,
+                };
+                return new Packet(type, leaveData);
+
+            case PacketTypes.Pub:
+                const pubData: PubPacketData = {
+                    id: this.getNextUniqueId(),
+                    topic,
+                    noecho: false,
+                    head: null,
+                    content: {},
+                };
+                return new Packet(type, pubData);
+
+            case PacketTypes.Get:
+                const getData: GetPacketData = {
+                    id: this.getNextUniqueId(),
+                    topic,
+                    what: null,
+                    desc: {},
+                    sub: {},
+                    data: {},
+                };
+                return new Packet(type, getData);
+
+            case PacketTypes.Set:
+                const setData: SetPacketData = {
+                    id: this.getNextUniqueId(),
+                    topic,
+                    desc: {},
+                    sub: {},
+                    tags: [],
+                };
+                return new Packet(type, setData);
+
+            case PacketTypes.Del:
+                const delData: DelPacketData = {
+                    id: this.getNextUniqueId(),
+                    topic,
+                    what: null,
+                    delseq: null,
+                    hard: false,
+                    user: null,
+                };
+                return new Packet(type, delData);
+
+            case PacketTypes.Note:
+                const noteData: NotePacketData = {
+                    topic,
+                    seq: undefined,
+                    what: null,
+                };
+                return new Packet(type, noteData);
 
             default:
                 throw new Error('Unknown packet type requested: ' + type);

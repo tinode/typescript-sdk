@@ -1,5 +1,8 @@
 import { ConnectionOptions, Connection, LPConnection, WSConnection } from './connection';
-import { getBrowserInfo } from './utilities';
+import { getBrowserInfo, mergeObj } from './utilities';
+import { AppSettings, AppInfo } from './constants';
+import { Packet, PacketTypes } from './models/packet';
+import { HiPacketData, AccPacketData, LoginPacketData } from './models/packet-data';
 
 export class Tinode {
     /**
@@ -78,6 +81,10 @@ export class Tinode {
      * Tinode's cache of objects
      */
     private cache = {};
+    /**
+     * Stores interval to clear later
+     */
+    private checkExpiredPromisesInterval: any;
 
     constructor(appName: string, platform: string, connectionConfig: ConnectionOptions) {
         this.connectionConfig = connectionConfig;
@@ -108,6 +115,10 @@ export class Tinode {
         if (this.connection) {
             this.connection.logger = this.logger;
         }
+
+        setInterval(() => {
+            this.checkExpiredPromises();
+        }, AppSettings.EXPIRE_PROMISES_PERIOD);
     }
 
     /**
@@ -166,6 +177,151 @@ export class Tinode {
             if (func(this.cache[idx], idx, context)) {
                 break;
             }
+        }
+    }
+
+    /**
+     * REVIEW: Add Types
+     * Make limited cache management available to topic.
+     * Caching user.public only. Everything else is per-topic.
+     * @param topic - Topic to attach cache
+     */
+    private attachCacheToTopic(topic: any) {
+        topic._tinode = this;
+
+        topic._cacheGetUser = (uid) => {
+            const pub = this.cacheGet('user', uid);
+            if (pub) {
+                return {
+                    user: uid,
+                    public: mergeObj({}, pub)
+                };
+            }
+            return undefined;
+        };
+        topic._cachePutUser = (uid, user) => {
+            return this.cachePut('user', uid, mergeObj({}, user.public));
+        };
+        topic._cacheDelUser = (uid) => {
+            return this.cacheDel('user', uid);
+        };
+        topic._cachePutSelf = () => {
+            return this.cachePut('topic', topic.name, topic);
+        };
+        topic._cacheDelSelf = () => {
+            return this.cacheDel('topic', topic.name);
+        };
+    }
+
+    /**
+     * Resolve or reject a pending promise.
+     * Unresolved promises are stored in _pendingPromises.
+     */
+    private execPromise(id: number, code: number, onOK: any, errorText: string) {
+        const callbacks = this.pendingPromises[id];
+        if (callbacks) {
+            delete this.pendingPromises[id];
+            if (code >= 200 && code < 400) {
+                if (callbacks.resolve) {
+                    callbacks.resolve(onOK);
+                }
+            } else if (callbacks.reject) {
+                callbacks.reject(new Error(errorText + ' (' + code + ')'));
+            }
+        }
+    }
+
+    /**
+     * Stored callbacks will be called when the response packet with this Id arrives
+     * @param id - Id of new promise
+     */
+    makePromise(id: number) {
+        let promise = null;
+        if (id) {
+            promise = new Promise((resolve, reject) => {
+                this.pendingPromises[id] = {
+                    resolve,
+                    reject,
+                    ts: new Date(),
+                };
+            });
+        }
+        return promise;
+    }
+
+    /**
+     * Reject promises which have not been resolved for too long.
+     */
+    private checkExpiredPromises(): void {
+        const err = new Error('Timeout (504)');
+        const expires = new Date(new Date().getTime() - AppSettings.EXPIRE_PROMISES_TIMEOUT);
+        for (const id in this.pendingPromises) {
+            if (id) {
+                const callbacks = this.pendingPromises[id];
+                if (callbacks && callbacks.ts < expires) {
+                    this.logger('Promise expired', id);
+                    delete this.pendingPromises[id];
+                    if (callbacks.reject) {
+                        callbacks.reject(err);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Generates unique message IDs
+     */
+    private getNextUniqueId(): string {
+        return (this.messageId !== 0) ? '' + this.messageId++ : undefined;
+    }
+
+    /**
+     * Get User Agent string
+     */
+    private getUserAgent(): string {
+        return this.appName + ' (' + (this.browser ? this.browser + '; ' : '') + this.hardwareOS + '); ' + AppInfo.LIBRARY;
+    }
+
+    /**
+     * Generator of packets stubs
+     */
+    initPacket(type: PacketTypes, topic: string): Packet<any> {
+        switch (type) {
+            case PacketTypes.Hi:
+                const hiData: HiPacketData = {
+                    id: this.getNextUniqueId(),
+                    ver: AppInfo.VERSION,
+                    ua: this.getUserAgent(),
+                    dev: this.deviceToken,
+                    lang: this.humanLanguage,
+                    platf: this.platform,
+                };
+                return new Packet(type, hiData);
+
+            case PacketTypes.Acc:
+                const accData: AccPacketData = {
+                    id: this.getNextUniqueId(),
+                    user: null,
+                    scheme: null,
+                    secret: null,
+                    login: false,
+                    tags: null,
+                    desc: {},
+                    cred: {},
+                };
+                return new Packet(type, accData);
+
+            case PacketTypes.Login:
+                const loginData: LoginPacketData = {
+                    id: this.getNextUniqueId(),
+                    scheme: null,
+                    secret: null,
+                };
+                return new Packet(type, loginData);
+
+            default:
+                throw new Error('Unknown packet type requested: ' + type);
         }
     }
 }

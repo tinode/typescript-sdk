@@ -1,5 +1,5 @@
 import { ConnectionOptions, Connection, LPConnection, WSConnection } from './connection';
-import { getBrowserInfo, mergeObj } from './utilities';
+import { getBrowserInfo, mergeObj, simplify, jsonLoggerHelper } from './utilities';
 import { Packet, PacketTypes } from './models/packet';
 import { AppSettings, AppInfo } from './constants';
 import {
@@ -228,7 +228,7 @@ export class Tinode {
      * Resolve or reject a pending promise.
      * Unresolved promises are stored in _pendingPromises.
      */
-    private execPromise(id: number, code: number, onOK: any, errorText: string) {
+    private execPromise(id: string, code: number, onOK: any, errorText: string) {
         const callbacks = this.pendingPromises[id];
         if (callbacks) {
             delete this.pendingPromises[id];
@@ -246,7 +246,7 @@ export class Tinode {
      * Stored callbacks will be called when the response packet with this Id arrives
      * @param id - Id of new promise
      */
-    makePromise(id: number) {
+    makePromise(id: string): Promise<any> {
         let promise = null;
         if (id) {
             promise = new Promise((resolve, reject) => {
@@ -297,7 +297,7 @@ export class Tinode {
     /**
      * Generator of packets stubs
      */
-    initPacket(type: PacketTypes, topic: string): Packet<any> {
+    private initPacket(type: PacketTypes, topic: string): Packet<any> {
         switch (type) {
             case PacketTypes.Hi:
                 const hiData: HiPacketData = {
@@ -401,5 +401,31 @@ export class Tinode {
             default:
                 throw new Error('Unknown packet type requested: ' + type);
         }
+    }
+
+    /**
+     * Send a packet. If packet id is provided return a promise.
+     * @param pkt - Packet
+     * @param id - Message ID
+     */
+    private send(pkt: Packet<any>, id: string) {
+        let promise: any;
+        if (id) {
+            promise = this.makePromise(id);
+        }
+        pkt = simplify(pkt);
+        const msg = JSON.stringify(pkt);
+        this.logger('out: ' + (this.trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : msg));
+        try {
+            this.connection.sendText(msg);
+        } catch (err) {
+            // If sendText throws, wrap the error in a promise or rethrow.
+            if (id) {
+                this.execPromise(id, AppSettings.NETWORK_ERROR, null, err.message);
+            } else {
+                throw err;
+            }
+        }
+        return promise;
     }
 }

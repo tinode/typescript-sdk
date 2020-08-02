@@ -1,5 +1,5 @@
 import { ConnectionOptions, Connection, LPConnection, WSConnection } from './connection';
-import { getBrowserInfo, mergeObj, simplify, jsonLoggerHelper } from './utilities';
+import { getBrowserInfo, mergeObj, simplify, jsonLoggerHelper, jsonParseHelper } from './utilities';
 import { Packet, PacketTypes } from './models/packet';
 import { AppSettings, AppInfo } from './constants';
 import {
@@ -14,6 +14,8 @@ import {
     LeavePacketData,
     LoginPacketData,
 } from './models/packet-data';
+import { Subject } from 'rxjs';
+import { OnLoginData } from './models/tinode-events';
 
 export class Tinode {
     /**
@@ -96,6 +98,42 @@ export class Tinode {
      * Stores interval to clear later
      */
     private checkExpiredPromisesInterval: any;
+    /**
+     * Subject to report login completion.
+     */
+    onLogin = new Subject<OnLoginData>();
+    /**
+     * Subject to receive server responses to network probes
+     */
+    onRawMessage = new Subject<string>();
+    /**
+     * Subject to receive server responses to network probes
+     */
+    onNetworkProbe = new Subject();
+    /**
+     * Subject to receive all messages as objects.
+     */
+    onMessage = new Subject();
+    /**
+     * Subject to receive {ctrl} (control) messages.
+     */
+    onCtrlMessage = new Subject();
+    /**
+     * Subject to receive {meta} messages.
+     */
+    onMetaMessage = new Subject();
+    /**
+     * Subject to receive {data} messages.
+     */
+    onDataMessage = new Subject();
+    /**
+     * Subject to receive {pres} messages.
+     */
+    onPresMessage = new Subject();
+    /**
+     * Subject to receive {info} messages.
+     */
+    onInfoMessage = new Subject();
 
     constructor(appName: string, platform: string, connectionConfig: ConnectionOptions) {
         this.connectionConfig = connectionConfig;
@@ -125,6 +163,7 @@ export class Tinode {
 
         if (this.connection) {
             this.connection.logger = this.logger;
+            this.connection.onMessage.subscribe((data) => this.onConnectionMessage(data));
         }
 
         setInterval(() => {
@@ -246,7 +285,7 @@ export class Tinode {
      * Stored callbacks will be called when the response packet with this Id arrives
      * @param id - Id of new promise
      */
-    makePromise(id: string): Promise<any> {
+    private makePromise(id: string): Promise<any> {
         let promise = null;
         if (id) {
             promise = new Promise((resolve, reject) => {
@@ -427,5 +466,135 @@ export class Tinode {
             }
         }
         return promise;
+    }
+
+    /**
+     * REVIEW: types
+     * On successful login save server-provided data.
+     * @param ctrl - Server response
+     */
+    private loginSuccessful(ctrl: any) {
+        if (!ctrl.params || !ctrl.params.user) {
+            return;
+        }
+
+        // This is a response to a successful login,
+        // extract UID and security token, save it in Tinode module
+        this.myUserID = ctrl.params.user;
+        this.authenticated = (ctrl && ctrl.code >= 200 && ctrl.code < 300);
+        if (ctrl.params && ctrl.params.token && ctrl.params.expires) {
+            this.authToken = {
+                token: ctrl.params.token,
+                expires: new Date(ctrl.params.expires)
+            };
+        } else {
+            this.authToken = null;
+        }
+
+        this.onLogin.next({ code: ctrl.code, text: ctrl.text });
+    }
+
+    /**
+     * The main message dispatcher.
+     * @param data - Server message data
+     */
+    private onConnectionMessage(data: string) {
+        // Skip empty response. This happens when LP times out.
+        if (!data) {
+            return;
+        }
+
+        this.inPacketCount++;
+
+        // Send raw message to listener
+        this.onRawMessage.next(data);
+
+        if (data === '0') {
+            // Server response to a network probe.
+            this.onNetworkProbe.next();
+            return;
+        }
+
+        const pkt = JSON.parse(data, jsonParseHelper);
+
+        if (!pkt) {
+            this.logger('in: ' + data);
+            this.logger('ERROR: failed to parse data');
+            return;
+        }
+
+        this.logger('in: ' + (this.trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : data));
+
+        // Send complete packet to listener
+        this.onMessage.next(pkt);
+
+        switch (true) {
+            case Boolean(pkt.ctrl):
+                this.handleCtrlMessage(pkt);
+                break;
+
+            case Boolean(pkt.meta):
+                this.handleMetaMessage(pkt);
+                break;
+
+            case Boolean(pkt.data):
+                this.handleDataMessage(pkt);
+                break;
+
+            case Boolean(pkt.pres):
+                this.handlePresMessage(pkt);
+                break;
+
+            case Boolean(pkt.info):
+                this.handleInfoMessage(pkt);
+                break;
+
+            default: this.logger('ERROR: Unknown packet received.');
+        }
+    }
+
+    /**
+     * REVIEW: types
+     * Handle ctrl type messages
+     * @param pkt - Server message data
+     */
+    private handleCtrlMessage(pkt: any) {
+        this.onCtrlMessage.next(pkt.ctrl);
+    }
+
+    /**
+     * REVIEW: types
+     * Handle meta type messages
+     * @param pkt - Server message data
+     */
+    private handleMetaMessage(pkt: any) {
+        this.onMetaMessage.next(pkt.meta);
+    }
+
+    /**
+     * REVIEW: types
+     * Handle data type messages
+     * @param pkt - Server message data
+     */
+    private handleDataMessage(pkt: any) {
+        this.onDataMessage.next(pkt.data);
+    }
+
+    /**
+     * REVIEW: types
+     * Handle pres type messages
+     * @param pkt - Server message data
+     */
+    private handlePresMessage(pkt: any) {
+        this.onPresMessage.next(pkt.pres);
+    }
+
+    /**
+     * REVIEW: types
+     * Handle info type messages
+     * @param pkt - Server message data
+     */
+    private handleInfoMessage(pkt: any) {
+        this.onInfoMessage.next(pkt.info);
     }
 }

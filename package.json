@@ -1,7 +1,7 @@
 {
   "name": "tinode-sdk",
   "version": "1.0.0",
-  "description": "Typescript implementation of tinode js clinet",
+  "description": "Typescript implementation of tinode js client",
   "main": "index.js",
   "scripts": {
     "build": "tsc -p .",

@@ -1,5 +1,5 @@
-import { ConnectionOptions, Connection, LPConnection, WSConnection } from './connection';
 import { getBrowserInfo, mergeObj, simplify, jsonLoggerHelper, jsonParseHelper } from './utilities';
+import { ConnectionOptions, Connection, LPConnection, WSConnection } from './connection';
 import { Packet, PacketTypes } from './models/packet';
 import { AppSettings, AppInfo } from './constants';
 import {
@@ -153,12 +153,17 @@ export class Tinode {
             this.humanLanguage = navigator.language || 'en-US';
         }
 
-        if (connectionConfig.transport === 'lp') {
-            this.connection = new LPConnection(connectionConfig);
-        } else if (connectionConfig.transport === 'ws') {
-            this.connection = new WSConnection(connectionConfig);
-        } else {
-            throw new Error('Invalid transport method is selected! It can be "lp" or "ws"');
+        switch (connectionConfig.transport) {
+            case 'lp':
+                this.connection = new LPConnection(connectionConfig);
+                break;
+
+            case 'ws':
+                this.connection = new WSConnection(connectionConfig);
+                break;
+
+            default:
+                throw new Error('Invalid transport method is selected! It can be "lp" or "ws"');
         }
 
         if (this.connection) {

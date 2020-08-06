@@ -1,5 +1,5 @@
 import { getBrowserInfo, mergeObj, simplify, jsonLoggerHelper, jsonParseHelper } from './utilities';
-import { ConnectionOptions, Connection, LPConnection, WSConnection } from './connection';
+import { ConnectionOptions, Connection, LPConnection, WSConnection, AutoReconnectData } from './connection';
 import { Packet, PacketTypes } from './models/packet';
 import { AppSettings, AppInfo } from './constants';
 import {
@@ -134,6 +134,18 @@ export class Tinode {
      * Subject to receive {info} messages.
      */
     onInfoMessage = new Subject();
+    /**
+     * Subject for connect event
+     */
+    onConnect = new Subject();
+    /**
+     * Subject for disconnect event
+     */
+    onDisconnect = new Subject();
+    /**
+     * Wrapper for the reconnect iterator callback.
+     */
+    onAutoReconnectIteration = new Subject<AutoReconnectData>();
 
     constructor(appName: string, platform: string, connectionConfig: ConnectionOptions) {
         this.connectionConfig = connectionConfig;
@@ -169,6 +181,8 @@ export class Tinode {
         if (this.connection) {
             this.connection.logger = this.logger;
             this.connection.onMessage.subscribe((data) => this.onConnectionMessage(data));
+            this.connection.onOpen.subscribe(() => this.hello());
+            this.connection.onAutoReconnectIteration.subscribe((data) => this.onAutoReconnectIteration.next(data));
         }
 
         setInterval(() => {
@@ -341,7 +355,7 @@ export class Tinode {
     /**
      * Generator of packets stubs
      */
-    private initPacket(type: PacketTypes, topic: string): Packet<any> {
+    private initPacket(type: PacketTypes, topic?: string): Packet<any> {
         switch (type) {
             case PacketTypes.Hi:
                 const hiData: HiPacketData = {
@@ -457,9 +471,12 @@ export class Tinode {
         if (id) {
             promise = this.makePromise(id);
         }
-        pkt = simplify(pkt);
-        const msg = JSON.stringify(pkt);
-        this.logger('out: ' + (this.trimLongStrings ? JSON.stringify(pkt, jsonLoggerHelper) : msg));
+
+        let formattedPkt = {};
+        formattedPkt[pkt.name] = pkt.data;
+        formattedPkt = simplify(formattedPkt);
+        const msg = JSON.stringify(formattedPkt);
+        this.logger('out: ' + (this.trimLongStrings ? JSON.stringify(formattedPkt, jsonLoggerHelper) : msg));
         try {
             this.connection.sendText(msg);
         } catch (err) {
@@ -565,6 +582,37 @@ export class Tinode {
      */
     private handleCtrlMessage(pkt: any) {
         this.onCtrlMessage.next(pkt.ctrl);
+
+        // Resolve or reject a pending promise, if any
+        if (pkt.ctrl.id) {
+            this.execPromise(pkt.ctrl.id, pkt.ctrl.code, pkt.ctrl, pkt.ctrl.text);
+        }
+
+        if (pkt.ctrl.code === 205 && pkt.ctrl.text === 'evicted') {
+            // User evicted from topic.
+            // REVIEW Set Topic type
+            const topic: any = this.cacheGet('topic', pkt.ctrl.topic);
+            if (topic) {
+                topic._resetSub();
+            }
+        }
+
+        if (pkt.ctrl.params && pkt.ctrl.params.what === 'data') {
+            // All messages received: "params":{"count":11,"what":"data"},
+            const topic = this.cacheGet('topic', pkt.ctrl.topic);
+            if (topic) {
+                topic._allMessagesReceived(pkt.ctrl.params.count);
+            }
+        }
+
+        if (pkt.ctrl.params && pkt.ctrl.params.what === 'sub') {
+            // The topic has no subscriptions.
+            const topic = this.cacheGet('topic', pkt.ctrl.topic);
+            if (topic) {
+                // Trigger topic.onSubsUpdated.
+                topic._processMetaSub([]);
+            }
+        }
     }
 
     /**
@@ -574,6 +622,16 @@ export class Tinode {
      */
     private handleMetaMessage(pkt: any) {
         this.onMetaMessage.next(pkt.meta);
+
+        // Preferred API: Route meta to topic, if one is registered
+        const topic = this.cacheGet('topic', pkt.meta.topic);
+        if (topic) {
+            topic._routeMeta(pkt.meta);
+        }
+
+        if (pkt.meta.id) {
+            this.execPromise(pkt.meta.id, 200, pkt.meta, 'META');
+        }
     }
 
     /**
@@ -583,6 +641,12 @@ export class Tinode {
      */
     private handleDataMessage(pkt: any) {
         this.onDataMessage.next(pkt.data);
+
+        // Preferred API: Route data to topic, if one is registered
+        const topic = this.cacheGet('topic', pkt.data.topic);
+        if (topic) {
+            topic._routeData(pkt.data);
+        }
     }
 
     /**
@@ -592,6 +656,12 @@ export class Tinode {
      */
     private handlePresMessage(pkt: any) {
         this.onPresMessage.next(pkt.pres);
+
+        // Preferred API: Route presence to topic, if one is registered
+        const topic = this.cacheGet('topic', pkt.pres.topic);
+        if (topic) {
+            topic._routePres(pkt.pres);
+        }
     }
 
     /**
@@ -601,5 +671,33 @@ export class Tinode {
      */
     private handleInfoMessage(pkt: any) {
         this.onInfoMessage.next(pkt.info);
+
+        // Preferred API: Route {info}} to topic, if one is registered
+        const topic = this.cacheGet('topic', pkt.info.topic);
+        if (topic) {
+            topic._routeInfo(pkt.info);
+        }
+    }
+
+    /**
+     * Send handshake to the server.
+     */
+    async hello(): Promise<any> {
+        const pkt: Packet<HiPacketData> = this.initPacket(PacketTypes.Hi);
+        try {
+            const ctrl = await this.send(pkt, pkt.data.id);
+            // Reset backoff counter on successful connection.
+            this.connection.backoffReset();
+            // Server response contains server protocol version, build, constraints,
+            // session ID for long polling. Save them.
+            if (ctrl.params) {
+                this.serverInfo = ctrl.params;
+            }
+            this.onConnect.next();
+            return ctrl;
+        } catch (error) {
+            this.connection.reconnect(true);
+            this.onDisconnect.next(error);
+        }
     }
 }

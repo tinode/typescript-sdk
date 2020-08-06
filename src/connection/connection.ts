@@ -104,7 +104,7 @@ export abstract class Connection {
      * Try to restore a network connection, also reset backoff.
      * @param force - reconnect even if there is a live connection already.
      */
-    protected reconnect(force?: boolean) {
+    reconnect(force?: boolean) {
         this.backoffStop();
         this.connect(null, force);
     }
@@ -135,7 +135,7 @@ export abstract class Connection {
     /**
      * Reset auto reconnect counter to zero.
      */
-    protected backoffReset(): void {
+    backoffReset(): void {
         this.backoffReset();
     }
 

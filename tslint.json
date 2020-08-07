@@ -16,6 +16,7 @@
             "timeEnd",
             "trace"
         ],
+        "adjacent-overload-signatures": false,
         "no-duplicate-variable": true,
         "no-bitwise": false,
         "no-empty": false,

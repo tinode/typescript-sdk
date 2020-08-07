@@ -120,3 +120,19 @@ export enum XDRStatus {
     LOADING = 3, // Downloading; responseText holds partial data.
     DONE = 4, // The operation is complete.
 }
+
+export const TopicTypesObj = {
+    me: 'me',
+    fnd: 'fnd',
+    grp: 'grp',
+    new: 'grp',
+    usr: 'p2p',
+    sys: 'sys',
+};
+
+export enum ServerConfigurationKeys {
+    MaxMessageSize = 'maxMessageSize',
+    MaxSubscriberCount = 'maxSubscriberCount',
+    MaxTagCount = 'maxTagCount',
+    MaxFileUploadSize = 'maxFileUploadSize',
+}

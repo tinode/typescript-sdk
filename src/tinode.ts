@@ -1,5 +1,5 @@
-import { getBrowserInfo, mergeObj, simplify, jsonLoggerHelper, jsonParseHelper } from './utilities';
-import { ConnectionOptions, Connection, LPConnection, WSConnection, AutoReconnectData } from './connection';
+import { getBrowserInfo, mergeObj, simplify, jsonLoggerHelper, jsonParseHelper, initializeNetworkProviders } from './utilities';
+import { ConnectionOptions, Connection, LPConnection, WSConnection, AutoReconnectData, OnDisconnetData } from './connection';
 import { Packet, PacketTypes } from './models/packet';
 import { AppSettings, AppInfo } from './constants';
 import {
@@ -14,7 +14,7 @@ import {
     LeavePacketData,
     LoginPacketData,
 } from './models/packet-data';
-import { Subject } from 'rxjs';
+import { Subject, Subscription } from 'rxjs';
 import { OnLoginData } from './models/tinode-events';
 
 export class Tinode {
@@ -146,6 +146,31 @@ export class Tinode {
      * Wrapper for the reconnect iterator callback.
      */
     onAutoReconnectIteration = new Subject<AutoReconnectData>();
+    /**
+     * Connection events subscriptions
+     */
+    private connectionEventsSubscriptions: Subscription[] = [];
+
+    /**
+     * Return information about the current version of this Tinode client library.
+     */
+    static getVersion(): string {
+        return AppInfo.VERSION;
+    }
+
+    /**
+     *  Return information about the current name and version of this Tinode library.
+     */
+    static getLibrary(): string {
+        return AppInfo.LIBRARY;
+    }
+
+    /**
+     * To use Tinode in a non browser context, supply WebSocket and XMLHttpRequest providers.
+     */
+    static setNetworkProviders(ws: any, xmlhttprequest: any) {
+        initializeNetworkProviders(ws, xmlhttprequest);
+    }
 
     constructor(appName: string, platform: string, connectionConfig: ConnectionOptions) {
         this.connectionConfig = connectionConfig;
@@ -180,14 +205,39 @@ export class Tinode {
 
         if (this.connection) {
             this.connection.logger = this.logger;
-            this.connection.onMessage.subscribe((data) => this.onConnectionMessage(data));
-            this.connection.onOpen.subscribe(() => this.hello());
-            this.connection.onAutoReconnectIteration.subscribe((data) => this.onAutoReconnectIteration.next(data));
+            this.doConnectionSubscriptions();
         }
 
         setInterval(() => {
             this.checkExpiredPromises();
         }, AppSettings.EXPIRE_PROMISES_PERIOD);
+    }
+
+    /**
+     * Subscribe and handle connection events
+     */
+    private doConnectionSubscriptions(): void {
+        const onMessageSubs = this.connection.onMessage.subscribe((data) => this.onConnectionMessage(data));
+        this.connectionEventsSubscriptions.push(onMessageSubs);
+
+        const onOpenSubs = this.connection.onOpen.subscribe(() => this.hello());
+        this.connectionEventsSubscriptions.push(onOpenSubs);
+
+        const onAutoReconnectSubs = this.connection.onAutoReconnectIteration.subscribe((data) => this.onAutoReconnectIteration.next(data));
+        this.connectionEventsSubscriptions.push(onAutoReconnectSubs);
+
+        const onDisconnectSubs = this.connection.onDisconnect.subscribe((data) => this.onConnectionDisconnect(data));
+        this.connectionEventsSubscriptions.push(onDisconnectSubs);
+    }
+
+    /**
+     * Toggle console logging. Logging is off by default.
+     * @param enabled - Set to to enable logging to console.
+     * @param trimLongStrings - Options to trim long strings
+     */
+    enableLogging(enabled: boolean, trimLongStrings?: boolean): void {
+        this.loggingEnabled = enabled;
+        this.trimLongStrings = enabled && trimLongStrings;
     }
 
     /**
@@ -241,7 +291,7 @@ export class Tinode {
      * @param func - function to call for each item
      * @param context - function context
      */
-    private cacheMap(func: any, context: any) {
+    private cacheMap(func: any, context?: any) {
         for (const idx in this.cache) {
             if (func(this.cache[idx], idx, context)) {
                 break;
@@ -680,6 +730,83 @@ export class Tinode {
     }
 
     /**
+     * Reset all variables and unsubscribe from all events and topics
+     * @param onDisconnectData - Data from connection disconnect event
+     */
+    private onConnectionDisconnect(onDisconnectData: OnDisconnetData): any {
+        this.inPacketCount = 0;
+        this.serverInfo = null;
+        this.authenticated = false;
+
+        // Mark all topics as unsubscribed
+        this.cacheMap((obj, key) => {
+            if (key.lastIndexOf('topic:', 0) === 0) {
+                obj._resetSub();
+            }
+        });
+
+        // Reject all pending promises
+        for (const key in this.pendingPromises) {
+            if (key) {
+                const callbacks = this.pendingPromises[key];
+                if (callbacks && callbacks.reject) {
+                    callbacks.reject(onDisconnectData);
+                }
+            }
+        }
+
+        // Unsubscribe from connection events
+        for (const subs of this.connectionEventsSubscriptions) {
+            subs.unsubscribe();
+        }
+        this.connectionEventsSubscriptions = [];
+
+        this.pendingPromises = {};
+        this.onDisconnect.next(onDisconnectData);
+    }
+
+    /**
+     * Connect to the server.
+     * @param host - name of the host to connect to
+     */
+    connect(host?: string): Promise<void> {
+        if (!this.connectionEventsSubscriptions.length) {
+            this.doConnectionSubscriptions();
+        }
+
+        return this.connection.connect(host);
+    }
+
+    /**
+     * Attempt to reconnect to the server immediately.
+     * @param force - reconnect even if there is a connection already.
+     */
+    reconnect(force?: boolean): Promise<any> {
+        return this.connection.connect(null, force);
+    }
+
+    /**
+     * Disconnect from the server.
+     */
+    disconnect(): void {
+        this.connection.disconnect();
+    }
+
+    /**
+     * Check for live connection to server.
+     */
+    isConnected(): boolean {
+        return this.connection.isConnected();
+    }
+
+    /**
+     * Check if connection is authenticated (last login was successful).
+     */
+    isAuthenticated(): boolean {
+        return this.authenticated;
+    }
+
+    /**
      * Send handshake to the server.
      */
     async hello(): Promise<any> {
@@ -698,6 +825,7 @@ export class Tinode {
         } catch (error) {
             this.connection.reconnect(true);
             this.onDisconnect.next(error);
+            throw error;
         }
     }
 }

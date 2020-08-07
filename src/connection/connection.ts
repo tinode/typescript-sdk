@@ -136,7 +136,7 @@ export abstract class Connection {
      * Reset auto reconnect counter to zero.
      */
     backoffReset(): void {
-        this.backoffReset();
+        this.boffIteration = 0;
     }
 
     /**

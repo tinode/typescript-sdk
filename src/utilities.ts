@@ -1,4 +1,4 @@
-import { base64codes, base64abc, DEL_CHAR, AppInfo } from './constants';
+import { base64codes, base64abc, DEL_CHAR, AppInfo, TopicTypesObj, TopicNames } from './constants';
 import { AccessMode } from './access-mode';
 
 function getBase64Code(charCode: number) {
@@ -464,4 +464,47 @@ export function makeBaseUrl(host: string, protocol: string, apiKey: string) {
 
 export function log(text: string, ...args: any[]) {
     // TODO: Implement
+}
+
+/**
+ *  Helper method to package account credential.
+ * @param meth - validation method or object with validation data.
+ * @param val - validation value (e.g. email or phone number).
+ * @param params - validation parameters.
+ * @param resp - validation response.
+ */
+export function credential(meth: any, val: string, params: object, resp: string) {
+    if (typeof meth === 'object') {
+        ({
+            val,
+            params,
+            resp,
+            meth
+        } = meth);
+    }
+    if (meth && (val || resp)) {
+        return [{ meth, val, resp, params }];
+    }
+    return null;
+}
+
+/**
+ * Determine topic type from topic's name: grp, p2p, me, fnd.
+ * @param name - Name of the topic to test.
+ */
+export function topicType(name: string) {
+    return TopicTypesObj[(typeof name === 'string') ? name.substring(0, 3) : 'xxx'];
+}
+
+
+export function isNewGroupTopicName(name: string) {
+    return (typeof name === 'string') && name.substring(0, 3) === TopicNames.TOPIC_NEW;
+}
+
+/**
+ *  Check if the given string represents NULL value.
+ * @param str - string to check for null value.
+ */
+export function isNullValue(str: string) {
+    return str === DEL_CHAR;
 }

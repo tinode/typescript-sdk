@@ -2,4 +2,4 @@ package-lock.json
 yarn.lock
 dist/*
 node_modules/*
-src/index.ts
+src/my-script.ts

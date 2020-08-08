@@ -1,10 +1,7 @@
+import { AuthenticationScheme } from './auth-scheme';
 import { AppInfo } from '../constants';
 
 export interface HiPacketData {
-    /**
-     * Message Id
-     */
-    id: string;
     /**
      * Version
      */
@@ -28,52 +25,33 @@ export interface HiPacketData {
 }
 
 export interface AccPacketData {
-    /**
-     * Message Id
-     */
-    id: string;
     user: string;
-    scheme: string;
+    scheme: AuthenticationScheme;
     secret: string;
     login: boolean;
     tags: string[];
     desc: any;
     cred: any;
+    token: string;
 }
 
 export interface LoginPacketData {
-    /**
-     * Message Id
-     */
-    id: string;
     scheme: string;
     secret: string;
 }
 
 export interface SubPacketData {
-    /**
-     * Message Id
-     */
-    id: string;
     topic: string;
     set: any;
     get: any;
 }
 
 export interface LeavePacketData {
-    /**
-     * Message Id
-     */
-    id: string;
     topic: string;
     unsub: boolean;
 }
 
 export interface PubPacketData {
-    /**
-     * Message Id
-     */
-    id: string;
     topic: string;
     noecho: boolean;
     head: null;
@@ -81,10 +59,6 @@ export interface PubPacketData {
 }
 
 export interface GetPacketData {
-    /**
-     * Message Id
-     */
-    id: string;
     topic: string;
     what: string;
     desc: any;
@@ -93,10 +67,6 @@ export interface GetPacketData {
 }
 
 export interface SetPacketData {
-    /**
-     * Message Id
-     */
-    id: string;
     topic: string;
     desc: any;
     sub: any;
@@ -104,10 +74,6 @@ export interface SetPacketData {
 }
 
 export interface DelPacketData {
-    /**
-     * Message Id
-     */
-    id: string;
     topic: string;
     what: string;
     delseq: any;

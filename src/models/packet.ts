@@ -3,11 +3,13 @@
  */
 export class Packet<T> {
     readonly name: string;
+    id: string;
     data: T;
 
-    constructor(name: string, data: T) {
+    constructor(name: string, data: T, id: string) {
         this.name = name;
         this.data = data;
+        this.id = id;
     }
 }
 

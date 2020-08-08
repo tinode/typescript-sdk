@@ -1,7 +1,7 @@
 import { getBrowserInfo, mergeObj, simplify, jsonLoggerHelper, jsonParseHelper, initializeNetworkProviders } from './utilities';
 import { ConnectionOptions, Connection, LPConnection, WSConnection, AutoReconnectData, OnDisconnetData } from './connection';
 import { Packet, PacketTypes } from './models/packet';
-import { AppSettings, AppInfo } from './constants';
+import { AppSettings, AppInfo, TopicNames } from './constants';
 import {
     HiPacketData,
     AccPacketData,
@@ -16,6 +16,8 @@ import {
 } from './models/packet-data';
 import { Subject, Subscription } from 'rxjs';
 import { OnLoginData } from './models/tinode-events';
+import { AccountParams } from './models/account-params';
+import { AuthenticationScheme } from './models/auth-scheme';
 
 export class Tinode {
     /**
@@ -409,18 +411,16 @@ export class Tinode {
         switch (type) {
             case PacketTypes.Hi:
                 const hiData: HiPacketData = {
-                    id: this.getNextUniqueId(),
                     ver: AppInfo.VERSION,
                     ua: this.getUserAgent(),
                     dev: this.deviceToken,
                     lang: this.humanLanguage,
                     platf: this.platform,
                 };
-                return new Packet(type, hiData);
+                return new Packet(type, hiData, this.getNextUniqueId());
 
             case PacketTypes.Acc:
                 const accData: AccPacketData = {
-                    id: this.getNextUniqueId(),
                     user: null,
                     scheme: null,
                     secret: null,
@@ -428,75 +428,69 @@ export class Tinode {
                     tags: null,
                     desc: {},
                     cred: {},
+                    token: null,
                 };
-                return new Packet(type, accData);
+                return new Packet(type, accData, this.getNextUniqueId());
 
             case PacketTypes.Login:
                 const loginData: LoginPacketData = {
-                    id: this.getNextUniqueId(),
                     scheme: null,
                     secret: null,
                 };
-                return new Packet(type, loginData);
+                return new Packet(type, loginData, this.getNextUniqueId());
 
             case PacketTypes.Sub:
                 const subData: SubPacketData = {
-                    id: this.getNextUniqueId(),
                     topic,
                     set: {},
                     get: {},
                 };
-                return new Packet(type, subData);
+                return new Packet(type, subData, this.getNextUniqueId());
 
             case PacketTypes.Leave:
                 const leaveData: LeavePacketData = {
-                    id: this.getNextUniqueId(),
                     topic,
                     unsub: false,
                 };
-                return new Packet(type, leaveData);
+                return new Packet(type, leaveData, this.getNextUniqueId());
 
             case PacketTypes.Pub:
                 const pubData: PubPacketData = {
-                    id: this.getNextUniqueId(),
                     topic,
                     noecho: false,
                     head: null,
                     content: {},
                 };
-                return new Packet(type, pubData);
+                return new Packet(type, pubData, this.getNextUniqueId());
 
             case PacketTypes.Get:
                 const getData: GetPacketData = {
-                    id: this.getNextUniqueId(),
                     topic,
                     what: null,
                     desc: {},
                     sub: {},
                     data: {},
                 };
-                return new Packet(type, getData);
+                return new Packet(type, getData, this.getNextUniqueId());
 
             case PacketTypes.Set:
                 const setData: SetPacketData = {
-                    id: this.getNextUniqueId(),
                     topic,
                     desc: {},
                     sub: {},
                     tags: [],
                 };
-                return new Packet(type, setData);
+                return new Packet(type, setData, this.getNextUniqueId());
 
             case PacketTypes.Del:
                 const delData: DelPacketData = {
-                    id: this.getNextUniqueId(),
                     topic,
                     what: null,
                     delseq: null,
                     hard: false,
                     user: null,
                 };
-                return new Packet(type, delData);
+                return new Packet(type, delData, this.getNextUniqueId());
 
             case PacketTypes.Note:
                 const noteData: NotePacketData = {
@@ -504,7 +498,7 @@ export class Tinode {
                     seq: undefined,
                     what: null,
                 };
-                return new Packet(type, noteData);
+                return new Packet(type, noteData, null);
 
             default:
                 throw new Error('Unknown packet type requested: ' + type);
@@ -812,7 +806,7 @@ export class Tinode {
     async hello(): Promise<any> {
         const pkt: Packet<HiPacketData> = this.initPacket(PacketTypes.Hi);
         try {
-            const ctrl = await this.send(pkt, pkt.data.id);
+            const ctrl = await this.send(pkt, pkt.id);
             // Reset backoff counter on successful connection.
             this.connection.backoffReset();
             // Server response contains server protocol version, build, constraints,
@@ -827,5 +821,51 @@ export class Tinode {
             this.onDisconnect.next(error);
             throw error;
         }
+    }
+
+    /**
+     * Create or update an account
+     * @param userId - User id to update
+     * @param scheme - Authentication scheme; "basic" and "anonymous" are the currently supported schemes.
+     * @param secret - Authentication secret, assumed to be already base64 encoded.
+     * @param login - Use new account to authenticate current session
+     * @param params - User data to pass to the server.
+     */
+    account(userId: string, scheme: AuthenticationScheme, secret: string, login: boolean, params?: AccountParams) {
+        const pkt: Packet<AccPacketData> = this.initPacket(PacketTypes.Acc);
+        pkt.data.user = userId;
+        pkt.data.scheme = scheme;
+        pkt.data.secret = secret;
+        pkt.data.login = login;
+
+        if (params) {
+            pkt.data.tags = params.tags;
+            pkt.data.cred = params.cred;
+            pkt.data.token = params.token;
+
+            pkt.data.desc.defacs = params.defacs;
+            pkt.data.desc.public = params.public;
+            pkt.data.desc.private = params.private;
+        }
+
+        return this.send(pkt, pkt.id);
+    }
+
+    /**
+     * Create a new user. Wrapper for `account`.
+     * @param scheme - Authentication scheme; "basic" is the only currently supported scheme.
+     * @param secret - Authentication secret
+     * @param login - Use new account to authenticate current session
+     * @param params - User data to pass to the server
+     */
+    createAccount(scheme: AuthenticationScheme, secret: string, login: boolean, params?: AccountParams) {
+        let promise = this.account(TopicNames.USER_NEW, scheme, secret, login, params);
+        if (login) {
+            promise = promise.then((ctrl) => {
+                this.loginSuccessful(ctrl);
+                return ctrl;
+            });
+        }
+        return promise;
     }
 }

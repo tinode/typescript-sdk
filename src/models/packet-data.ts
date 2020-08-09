@@ -38,6 +38,7 @@ export interface AccPacketData {
 export interface LoginPacketData {
     scheme: string;
     secret: string;
+    cred: any;
 }
 
 export interface SubPacketData {

@@ -63,7 +63,7 @@ export class Tinode {
     /**
      * Login used in the last successful basic authentication
      */
-    private login = null;
+    private lastLogin = null;
     /**
      * Token which can be used for login instead of login/password.
      */
@@ -436,6 +436,7 @@ export class Tinode {
                 const loginData: LoginPacketData = {
                     scheme: null,
                     secret: null,
+                    cred: null,
                 };
                 return new Packet(type, loginData, this.getNextUniqueId());
 
@@ -895,6 +896,57 @@ export class Tinode {
         username = username || '';
         password = password || '';
         return this.account(userId, AuthenticationScheme.Basic, base64encode(username + ':' + password), false, params);
+    }
+
+    /**
+     * Authenticate current session.
+     * @param scheme - Authentication scheme; <tt>"basic"</tt> is the only currently supported scheme.
+     * @param secret - Authentication secret, assumed to be already base64 encoded.
+     * @param cred - cred
+     * @returns Promise which will be resolved/rejected when server reply is received
+     */
+    async login(scheme: AuthenticationScheme, secret: string, cred?: any): Promise<any> {
+        const pkt: Packet<LoginPacketData> = this.initPacket(PacketTypes.Login);
+        pkt.data.scheme = scheme;
+        pkt.data.secret = secret;
+        pkt.data.cred = cred;
+
+        const ctrl = await this.send(pkt, pkt.id);
+        this.loginSuccessful(ctrl);
+        return ctrl;
+    }
+
+    /**
+     * Wrapper for `login` with basic authentication
+     * @param username - User name
+     * @param password - Password
+     * @param cred - cred
+     * @returns Promise which will be resolved/rejected on receiving server reply.
+     */
+    async loginBasic(username: string, password: string, cred?: any) {
+        const ctrl = this.login(AuthenticationScheme.Basic, base64encode(username + ':' + password), cred);
+        this.lastLogin = username;
+        return ctrl;
+    }
+
+    /**
+     * Wrapper for `login` with token authentication
+     * @param token - Token received in response to earlier login.
+     * @param cred - cred
+     * @returns Promise which will be resolved/rejected on receiving server reply.
+     */
+    loginToken(token: string, cred?: any): Promise<any> {
+        return this.login(AuthenticationScheme.Token, token, cred);
+    }
+
+    /**
+     * Send a request for resetting an authentication secret.
+     * @param scheme - authentication scheme to reset.
+     * @param method - method to use for resetting the secret, such as "email" or "tel".
+     * @param value - value of the credential to use, a specific email address or a phone number.
+     */
+    requestResetAuthSecret(scheme: AuthenticationScheme, method: string, value: string): Promise<any> {
+        return this.login(AuthenticationScheme.Reset, base64encode(scheme + ':' + method + ':' + value));
     }
 
     /**

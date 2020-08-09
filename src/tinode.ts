@@ -1,7 +1,7 @@
-import { getBrowserInfo, mergeObj, simplify, jsonLoggerHelper, jsonParseHelper, initializeNetworkProviders } from './utilities';
+import { getBrowserInfo, mergeObj, simplify, jsonLoggerHelper, jsonParseHelper, initializeNetworkProviders, base64encode } from './utilities';
 import { ConnectionOptions, Connection, LPConnection, WSConnection, AutoReconnectData, OnDisconnetData } from './connection';
-import { Packet, PacketTypes } from './models/packet';
 import { AppSettings, AppInfo, TopicNames } from './constants';
+import { Packet, PacketTypes } from './models/packet';
 import {
     HiPacketData,
     AccPacketData,
@@ -517,7 +517,7 @@ export class Tinode {
         }
 
         let formattedPkt = {};
-        formattedPkt[pkt.name] = pkt.data;
+        formattedPkt[pkt.name] = { ...pkt.data, id: pkt.id };
         formattedPkt = simplify(formattedPkt);
         const msg = JSON.stringify(formattedPkt);
         this.logger('out: ' + (this.trimLongStrings ? JSON.stringify(formattedPkt, jsonLoggerHelper) : msg));
@@ -831,7 +831,7 @@ export class Tinode {
      * @param login - Use new account to authenticate current session
      * @param params - User data to pass to the server.
      */
-    account(userId: string, scheme: AuthenticationScheme, secret: string, login: boolean, params?: AccountParams) {
+    account(userId: string, scheme: AuthenticationScheme, secret: string, login: boolean, params?: AccountParams): Promise<any> {
         const pkt: Packet<AccPacketData> = this.initPacket(PacketTypes.Acc);
         pkt.data.user = userId;
         pkt.data.scheme = scheme;
@@ -858,7 +858,7 @@ export class Tinode {
      * @param login - Use new account to authenticate current session
      * @param params - User data to pass to the server
      */
-    createAccount(scheme: AuthenticationScheme, secret: string, login: boolean, params?: AccountParams) {
+    createAccount(scheme: AuthenticationScheme, secret: string, login: boolean, params?: AccountParams): Promise<any> {
         let promise = this.account(TopicNames.USER_NEW, scheme, secret, login, params);
         if (login) {
             promise = promise.then((ctrl) => {
@@ -867,5 +867,54 @@ export class Tinode {
             });
         }
         return promise;
+    }
+
+    /**
+     * Create user with 'basic' authentication scheme and immediately
+     * use it for authentication. Wrapper for `account`
+     * @param username - Using this username you can log into your account
+     * @param password - User's password
+     * @param params - User data to pass to the server
+     */
+    createAccountBasic(username: string, password: string, login: boolean, params?: AccountParams): Promise<any> {
+        username = username || '';
+        password = password || '';
+        const secret = base64encode(username + ':' + password);
+        return this.createAccount(AuthenticationScheme.Basic, secret, login, params);
+    }
+
+    /**
+     * Update user's credentials for 'basic' authentication scheme. Wrapper for `account`
+     * @param userId - User ID to update
+     * @param username - Using this username you can log into your account
+     * @param password - User's password
+     * @param params - Data to pass to the server.
+     */
+    updateAccountBasic(userId: string, username: string, password: string, params?: AccountParams): Promise<any> {
+        // Make sure we are not using 'null' or 'undefined';
+        username = username || '';
+        password = password || '';
+        return this.account(userId, AuthenticationScheme.Basic, base64encode(username + ':' + password), false, params);
+    }
+
+    /**
+     * Set or refresh the push notifications/device token. If the client is connected,
+     * the deviceToken can be sent to the server.
+     * @param deviceToken - token obtained from the provider
+     * @param sendToServer - if true, send deviceToken to server immediately.
+     * @returns true if attempt was made to send the token to the server.
+     */
+    setDeviceToken(deviceToken: string, sendToServer: boolean): boolean {
+        let sent = false;
+        if (deviceToken && deviceToken !== this.deviceToken) {
+            this.deviceToken = deviceToken;
+            if (sendToServer && this.isConnected() && this.isAuthenticated()) {
+                const pkt: Packet<HiPacketData> = this.initPacket(PacketTypes.Hi);
+                pkt.data.dev = deviceToken;
+                this.send(pkt, pkt.id);
+                sent = true;
+            }
+        }
+        return sent;
     }
 }

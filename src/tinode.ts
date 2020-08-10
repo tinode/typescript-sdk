@@ -1,7 +1,17 @@
-import { getBrowserInfo, mergeObj, simplify, jsonLoggerHelper, jsonParseHelper, initializeNetworkProviders, base64encode } from './utilities';
 import { ConnectionOptions, Connection, LPConnection, WSConnection, AutoReconnectData, OnDisconnetData } from './connection';
 import { AppSettings, AppInfo, TopicNames } from './constants';
 import { Packet, PacketTypes } from './models/packet';
+import {
+    mergeObj,
+    simplify,
+    topicType,
+    base64encode,
+    getBrowserInfo,
+    jsonParseHelper,
+    jsonLoggerHelper,
+    isNewGroupTopicName,
+    initializeNetworkProviders,
+} from './utilities';
 import {
     HiPacketData,
     AccPacketData,
@@ -15,9 +25,12 @@ import {
     LoginPacketData,
 } from './models/packet-data';
 import { Subject, Subscription } from 'rxjs';
+import { AuthToken } from './models/auth-token';
 import { OnLoginData } from './models/tinode-events';
 import { AccountParams } from './models/account-params';
 import { AuthenticationScheme } from './models/auth-scheme';
+import { GetQuery } from './models/get-query';
+import { SetParams } from './models/set-params';
 
 export class Tinode {
     /**
@@ -67,7 +80,7 @@ export class Tinode {
     /**
      * Token which can be used for login instead of login/password.
      */
-    private authToken = null;
+    private authToken: AuthToken = null;
     /**
      * Counter of received packets
      */
@@ -950,6 +963,24 @@ export class Tinode {
     }
 
     /**
+     * Get stored authentication token.
+     */
+    getAuthToken(): AuthToken {
+        if (this.authToken && (this.authToken.expires.getTime() > Date.now())) {
+            return this.authToken;
+        } else {
+            this.authToken = null;
+        }
+    }
+
+    /**
+     * Application may provide a saved authentication token.
+     */
+    setAuthToken(token: AuthToken) {
+        this.authToken = token;
+    }
+
+    /**
      * Set or refresh the push notifications/device token. If the client is connected,
      * the deviceToken can be sent to the server.
      * @param deviceToken - token obtained from the provider
@@ -968,5 +999,55 @@ export class Tinode {
             }
         }
         return sent;
+    }
+
+    /**
+     * Send a topic subscription request.
+     * @param topicName - Name of the topic to subscribe to
+     * @param getParams - Optional subscription metadata query
+     * @param setParams - Optional initialization parameters
+     */
+    subscribe(topicName: string, getParams: GetQuery, setParams: SetParams): Promise<any> {
+        const pkt: Packet<SubPacketData> = this.initPacket(PacketTypes.Sub, topicName);
+        if (!topicName) {
+            topicName = TopicNames.TOPIC_NEW;
+        }
+
+        pkt.data.get = getParams;
+
+        if (setParams) {
+            if (setParams.sub) {
+                pkt.data.set.sub = setParams.sub;
+            }
+
+            if (setParams.desc) {
+                if (isNewGroupTopicName(topicName)) {
+                    // Full set.desc params are used for new topics only
+                    pkt.data.set.desc = setParams.desc;
+                } else if (topicType(topicName) === 'p2p' && setParams.desc.defacs) {
+                    // Use optional default permissions only.
+                    pkt.data.set.desc = {
+                        defacs: setParams.desc.defacs
+                    };
+                }
+            }
+
+            if (setParams.tags) {
+                pkt.data.set.tags = setParams.tags;
+            }
+        }
+
+        return this.send(pkt, pkt.id);
+    }
+
+    /**
+     * Detach and optionally unsubscribe from the topic
+     * @param topicName - Topic to detach from.
+     * @param unSubscribe - If true, detach and unsubscribe, otherwise just detach.
+     */
+    leave(topicName: string, unsubscribe: boolean): Promise<any> {
+        const pkt: Packet<LeavePacketData> = this.initPacket(PacketTypes.Leave, topicName);
+        pkt.data.unsub = unsubscribe;
+        return this.send(pkt, pkt.id);
     }
 }

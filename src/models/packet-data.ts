@@ -55,8 +55,11 @@ export interface LeavePacketData {
 export interface PubPacketData {
     topic: string;
     noecho: boolean;
-    head: null;
+    head: any;
     content: any;
+    seq: number;
+    from: string;
+    ts: Date;
 }
 
 export interface GetPacketData {

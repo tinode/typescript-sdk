@@ -25,12 +25,13 @@ import {
     LoginPacketData,
 } from './models/packet-data';
 import { Subject, Subscription } from 'rxjs';
+import { GetQuery } from './models/get-query';
+import { SetParams } from './models/set-params';
 import { AuthToken } from './models/auth-token';
 import { OnLoginData } from './models/tinode-events';
 import { AccountParams } from './models/account-params';
 import { AuthenticationScheme } from './models/auth-scheme';
-import { GetQuery } from './models/get-query';
-import { SetParams } from './models/set-params';
+import { Drafty } from './drafty';
 
 export class Tinode {
     /**
@@ -474,6 +475,9 @@ export class Tinode {
                     noecho: false,
                     head: null,
                     content: {},
+                    from: null,
+                    seq: null,
+                    ts: null,
                 };
                 return new Packet(type, pubData, this.getNextUniqueId());
 
@@ -1049,5 +1053,50 @@ export class Tinode {
         const pkt: Packet<LeavePacketData> = this.initPacket(PacketTypes.Leave, topicName);
         pkt.data.unsub = unsubscribe;
         return this.send(pkt, pkt.id);
+    }
+
+    /**
+     * Create message draft without sending it to the server
+     * @param topic - Name of the topic to publish to
+     * @param data - Payload to publish
+     * @param noEcho - If true, tell the server not to echo the message to the original session.
+     */
+    createMessage(topic: string, data: any, noEcho: boolean = false): Packet<PubPacketData> {
+        const pkt: Packet<PubPacketData> = this.initPacket(PacketTypes.Pub, topic);
+        const dft = typeof data === 'string' ? Drafty.parse(data) : data;
+
+        if (dft && !Drafty.isPlainText(dft)) {
+            pkt.data.head = {
+                mime: Drafty.getContentType()
+            };
+            data = dft;
+        }
+
+        pkt.data.noecho = noEcho;
+        pkt.data.content = data;
+        return pkt;
+    }
+
+    /**
+     * Publish message to topic. The message packet should be created by `createMessage`
+     * @param pubPkt - Message to publish
+     */
+    publishMessage(pubPkt: Packet<PubPacketData>): Promise<any> {
+        // Make a shallow copy. Needed in order to clear locally-assigned temp values;
+        pubPkt = Object.assign({}, pubPkt);
+        pubPkt.data.seq = undefined;
+        pubPkt.data.from = undefined;
+        pubPkt.data.ts = undefined;
+        return this.send(pubPkt, pubPkt.id);
+    }
+
+    /**
+     * Publish {data} message to topic
+     * @param topic - Name of the topic to publish to
+     * @param data - Payload to publish
+     * @param noEcho - If true, tell the server not to echo the message to the original session.
+     */
+    publish(topic: string, data: any, noEcho: boolean = false) {
+        return this.publishMessage(this.createMessage(topic, data, noEcho));
     }
 }

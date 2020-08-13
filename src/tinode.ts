@@ -1198,7 +1198,7 @@ export class Tinode {
      * @param hard - hard-delete user.
      */
     async delCurrentUser(hard: boolean): Promise<any> {
-        const pkt = this.initPacket(PacketTypes.Del, null);
+        const pkt: Packet<DelPacketData> = this.initPacket(PacketTypes.Del, null);
         pkt.data.what = 'user';
         pkt.data.hard = hard;
 

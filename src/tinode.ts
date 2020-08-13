@@ -32,6 +32,7 @@ import { OnLoginData } from './models/tinode-events';
 import { AccountParams } from './models/account-params';
 import { AuthenticationScheme } from './models/auth-scheme';
 import { Drafty } from './drafty';
+import { DelRange } from './models/del-range';
 
 export class Tinode {
     /**
@@ -507,6 +508,7 @@ export class Tinode {
                     delseq: null,
                     hard: false,
                     user: null,
+                    cred: null,
                 };
                 return new Packet(type, delData, this.getNextUniqueId());
 
@@ -1096,7 +1098,112 @@ export class Tinode {
      * @param data - Payload to publish
      * @param noEcho - If true, tell the server not to echo the message to the original session.
      */
-    publish(topic: string, data: any, noEcho: boolean = false) {
+    publish(topic: string, data: any, noEcho: boolean = false): Promise<any> {
         return this.publishMessage(this.createMessage(topic, data, noEcho));
+    }
+
+    /**
+     * Request topic metadata
+     * @param topicName - Name of the topic to query.
+     * @param params - Parameters of the query. Use {Tinode.MetaGetBuilder} to generate.
+     */
+    getMeta(topicName: string, params: GetQuery): Promise<any> {
+        const pkt: Packet<GetPacketData> = this.initPacket(PacketTypes.Get, topicName);
+        pkt.data = mergeObj(pkt.data, params);
+        return this.send(pkt, pkt.id);
+    }
+
+    /**
+     * Update topic's metadata: description, subscriptions.
+     * @param topicName - Topic to update
+     * @param params - topic metadata to update
+     */
+    setMeta(topicName: string, params: SetParams): Promise<any> {
+        const pkt = this.initPacket(PacketTypes.Set, topicName);
+        const what = [];
+
+        if (params) {
+            ['desc', 'sub', 'tags', 'cred'].forEach((key) => {
+                if (params.hasOwnProperty(key)) {
+                    what.push(key);
+                    pkt.data[key] = params[key];
+                }
+            });
+        }
+        if (what.length === 0) {
+            return Promise.reject(new Error('Invalid {set} parameters'));
+        }
+        return this.send(pkt, pkt.id);
+    }
+
+    /**
+     * Delete some or all messages in a topic.
+     * @param topicName - Topic name to delete messages from.
+     * @param ranges - Ranges of message IDs to delete
+     * @param hard - Hard or soft delete
+     */
+    delMessages(topicName: string, ranges: DelRange[], hard: boolean): Promise<any> {
+        const pkt: Packet<DelPacketData> = this.initPacket(PacketTypes.Del, topicName);
+        pkt.data.what = 'msg';
+        pkt.data.delseq = ranges;
+        pkt.data.hard = hard;
+        return this.send(pkt, pkt.id);
+    }
+
+    /**
+     * Delete the topic all together. Requires Owner permission.
+     * @param topicName - Name of the topic to delete
+     * @param hard - hard-delete topic.
+     */
+    async delTopic(topicName: string, hard: boolean): Promise<any> {
+        const pkt: Packet<DelPacketData> = this.initPacket(PacketTypes.Del, topicName);
+        pkt.data.what = 'topic';
+        pkt.data.hard = hard;
+
+        const ctrl = await this.send(pkt, pkt.id);
+        this.cacheDel('topic', topicName);
+        return ctrl;
+    }
+
+    /**
+     * Delete subscription. Requires Share permission.
+     * @param topicName - Name of the topic to delete
+     * @param userId - User ID to remove
+     */
+    delSubscription(topicName: string, userId: string): Promise<any> {
+        const pkt: Packet<DelPacketData> = this.initPacket(PacketTypes.Del, topicName);
+        pkt.data.what = 'sub';
+        pkt.data.user = userId;
+        return this.send(pkt, pkt.id);
+    }
+
+    /**
+     * Delete credential. Always sent on 'me' topic.
+     * @param method - validation method such as 'email' or 'tel'.
+     * @param value - validation value, i.e. 'alice@example.com'.
+     */
+    delCredential(method: string, value: string): Promise<any> {
+        const pkt: Packet<DelPacketData> = this.initPacket(PacketTypes.Del, TopicNames.TOPIC_ME);
+        pkt.data.what = 'cred';
+        pkt.data.cred = {
+            meth: method,
+            val: value
+        };
+
+        return this.send(pkt, pkt.id);
+    }
+
+    /**
+     * Request to delete account of the current user.
+     * @param hard - hard-delete user.
+     */
+    async delCurrentUser(hard: boolean): Promise<any> {
+        const pkt = this.initPacket(PacketTypes.Del, null);
+        pkt.data.what = 'user';
+        pkt.data.hard = hard;
+
+        const ctrl = await this.send(pkt, pkt.id);
+        this.myUserID = null;
+        return ctrl;
     }
 }

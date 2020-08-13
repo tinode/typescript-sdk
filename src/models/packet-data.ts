@@ -83,6 +83,7 @@ export interface DelPacketData {
     delseq: any;
     user: any;
     hard: boolean;
+    cred: any;
 }
 
 export interface NotePacketData {

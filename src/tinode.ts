@@ -24,15 +24,19 @@ import {
     LeavePacketData,
     LoginPacketData,
 } from './models/packet-data';
+import { Drafty } from './drafty';
+import { Topic } from './topic/topic';
+import { TopicMe } from './topic/topic-me';
+import { TopicFnd } from './topic/topic-fnd';
 import { Subject, Subscription } from 'rxjs';
 import { GetQuery } from './models/get-query';
+import { DelRange } from './models/del-range';
 import { SetParams } from './models/set-params';
 import { AuthToken } from './models/auth-token';
 import { OnLoginData } from './models/tinode-events';
 import { AccountParams } from './models/account-params';
 import { AuthenticationScheme } from './models/auth-scheme';
-import { Drafty } from './drafty';
-import { DelRange } from './models/del-range';
+import { LargeFileHelper } from './large-file-helper';
 
 export class Tinode {
     /**
@@ -530,7 +534,7 @@ export class Tinode {
      * @param pkt - Packet
      * @param id - Message ID
      */
-    private send(pkt: Packet<any>, id: string) {
+    private send(pkt: Packet<any>, id?: string) {
         let promise: any;
         if (id) {
             promise = this.makePromise(id);
@@ -1205,5 +1209,162 @@ export class Tinode {
         const ctrl = await this.send(pkt, pkt.id);
         this.myUserID = null;
         return ctrl;
+    }
+
+    /**
+     * Notify server that a message or messages were read or received. Does NOT return promise.
+     * @param topicName - Name of the topic where the message is being acknowledged.
+     * @param what - Action being acknowledged, either "read" or "recv".
+     * @param seq - Maximum id of the message being acknowledged.
+     */
+    note(topicName: string, what: string, seq: number): void {
+        if (seq <= 0 || seq >= AppSettings.LOCAL_SEQ_ID) {
+            throw new Error('Invalid message id ' + seq);
+        }
+
+        const pkt: Packet<NotePacketData> = this.initPacket(PacketTypes.Note, topicName);
+        pkt.data.what = what;
+        pkt.data.seq = seq;
+        this.send(pkt);
+    }
+
+    /**
+     * Broadcast a key-press notification to topic subscribers. Used to show
+     * typing notifications "user X is typing..."
+     * @param topicName - Name of the topic to broadcast to
+     */
+    noteKeyPress(topicName: string) {
+        const pkt: Packet<NotePacketData> = this.initPacket(PacketTypes.Note, topicName);
+        pkt.data.what = 'kp';
+        this.send(pkt);
+    }
+
+    /**
+     * Get a named topic, either pull it from cache or create a new instance.
+     * There is a single instance of topic for each name
+     * @param topicName - Name of the topic to get
+     */
+    getTopic(topicName: string) {
+        let topic = this.cacheGet('topic', name);
+        if (!topic && name) {
+            if (name === TopicNames.TOPIC_ME) {
+                topic = new TopicMe();
+            } else if (name === TopicNames.TOPIC_FND) {
+                topic = new TopicFnd();
+            } else {
+                topic = new Topic(name);
+            }
+            // topic._new = false;
+            this.cachePut('topic', name, topic);
+            this.attachCacheToTopic(topic);
+        }
+        return topic;
+    }
+
+    /**
+     * Instantiate a new unnamed topic. An actual name will be assigned by the server
+     */
+    newTopic(): Topic {
+        const topic = new Topic(TopicNames.TOPIC_NEW);
+        this.attachCacheToTopic(topic);
+        return topic;
+    }
+
+    /**
+     * Generate unique name  like 'new123456' suitable for creating a new group topic.
+     * @returns name which can be used for creating a new group topic.
+     */
+    newGroupTopicName(): string {
+        return TopicNames.TOPIC_NEW + this.getNextUniqueId();
+    }
+
+    /**
+     * Instantiate a new P2P topic with a given peer
+     * @param peer - User id of the peer to start topic with.
+     */
+    newTopicWith(peer: string): Topic {
+        const topic = new Topic(peer);
+        this.attachCacheToTopic(topic);
+        return topic;
+    }
+
+    /**
+     * Instantiate 'me' topic or get it from cache.
+     */
+    getMeTopic(): TopicMe {
+        return this.getTopic(TopicNames.TOPIC_ME);
+    }
+
+    /**
+     * Instantiate 'fnd' (find) topic or get it from cache.
+     */
+    getFndTopic(): TopicFnd {
+        return this.getTopic(TopicNames.TOPIC_FND);
+    }
+
+    /**
+     *  Create a new LargeFileHelper instance
+     */
+    getLargeFileHelper() {
+        return new LargeFileHelper(this);
+    }
+
+    /**
+     * Get the UID of the the current authenticated user.
+     * @returns UID of the current user or undefined if the session is not yet authenticated or if there is no session.
+     */
+    getCurrentUserID(): string {
+        return this.myUserID;
+    }
+
+    /**
+     * Check if the given user ID is equal to the current user's UID.
+     * @param userId - User id to check.
+     */
+    isMe(userId: string): boolean {
+        return this.myUserID === userId;
+    }
+
+    /**
+     * Get login used for last successful authentication.
+     */
+    getCurrentLogin() {
+        return this.lastLogin;
+    }
+
+    /**
+     * Return information about the server: protocol version and build timestamp.
+     */
+    getServerInfo() {
+        return this.serverInfo;
+    }
+
+    /**
+     * Return server-provided configuration value (long integer).
+     * @param name of the value to return
+     * @param defaultValue to return in case server limit is not set or not found
+     */
+    getServerLimit(name: any, defaultValue) {
+        return (this.serverInfo ? this.serverInfo[name] : null) || defaultValue;
+    }
+
+    /**
+     * Set UI language to report to the server. Must be called before 'hi' is sent, otherwise it will not be used.
+     * @param humanLanguage - human (UI) language, like "en_US" or "zh-Hans".
+     */
+    setHumanLanguage(humanLanguage: string) {
+        if (humanLanguage) {
+            this.humanLanguage = humanLanguage;
+        }
+    }
+
+    /**
+     * Check if given topic is online.
+     * @param topicName - Name of the topic to test.
+     */
+    isTopicOnline(topicName: string): boolean {
+        const me = this.getMeTopic();
+        const cont = me && me.getContact(name);
+        return cont && cont.online;
     }
 }

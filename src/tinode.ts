@@ -266,7 +266,7 @@ export class Tinode {
      * @param str - String to log
      * @param args - arguments
      */
-    private logger(str: string, ...args: any[]) {
+    logger(str: string, ...args: any[]) {
         if (this.loggingEnabled) {
             const d = new Date();
             const dateString = ('0' + d.getUTCHours()).slice(-2) + ':' +

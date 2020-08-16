@@ -1,3 +1,4 @@
+import { GetQuery } from './models/get-query';
 import { Tinode } from './tinode';
 import { Topic } from './topic';
 
@@ -134,5 +135,50 @@ export class MetaGetBuilder {
             this.tinode.logger('ERROR: Invalid topic type for MetaGetBuilder:withCreds', this.topic.getType());
         }
         return this;
+    }
+
+    /**
+     * Add query parameters to fetch deleted messages within explicit limits. Any/all parameters can be null.
+     * @param since - ids of messages deleted since this 'del' id (inclusive)
+     * @param limit - number of deleted message ids to fetch
+     */
+    withDel(since?: number, limit?: number): MetaGetBuilder {
+        if (since || limit) {
+            this.what.del = { since, limit };
+        }
+        return this;
+    }
+
+    /**
+     * Add query parameters to fetch messages deleted after the saved 'del' id.
+     * @param limit - number of deleted message ids to fetch
+     */
+    withLaterDel(limit?: number): MetaGetBuilder {
+        // Specify 'since' only if we have already received some messages. If
+        // we have no locally cached messages then we don't care if any messages were deleted.
+        return this.withDel(this.topic.maxSeq > 0 ? this.topic.maxDel + 1 : undefined, limit);
+    }
+
+    /**
+     *  Construct parameters
+     */
+    build(): GetQuery {
+        const what: string[] = [];
+        const instance = this;
+        let params: GetQuery = {};
+        ['data', 'sub', 'desc', 'tags', 'cred', 'del'].forEach((key) => {
+            if (instance.what.hasOwnProperty(key)) {
+                what.push(key);
+                if (Object.getOwnPropertyNames(instance.what[key]).length > 0) {
+                    params[key] = instance.what[key];
+                }
+            }
+        });
+        if (what.length > 0) {
+            params.what = what.join(' ');
+        } else {
+            params = undefined;
+        }
+        return params;
     }
 }

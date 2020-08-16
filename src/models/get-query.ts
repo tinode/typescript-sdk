@@ -10,7 +10,8 @@ export interface GetDataType {
 }
 
 export interface GetQuery {
-    desc: GetOptsType;
-    sub: GetOptsType;
-    data: GetDataType;
+    desc?: GetOptsType;
+    sub?: GetOptsType;
+    data?: GetDataType;
+    what?: string;
 }

@@ -6,10 +6,16 @@ export class Packet<T> {
     id: string;
     data: T;
 
+    sending: boolean;
+    failed: boolean;
+
     constructor(name: string, data: T, id: string) {
         this.name = name;
         this.data = data;
         this.id = id;
+
+        this.failed = false;
+        this.sending = false;
     }
 }
 

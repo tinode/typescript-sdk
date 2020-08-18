@@ -4,4 +4,8 @@ export class Drafty {
         return false;
     }
     static getContentType() { }
+    static hasAttachments(a?: any) {
+        return false;
+    }
+    static attachments(a: any, b: any) { }
 }

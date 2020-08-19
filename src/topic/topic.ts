@@ -198,11 +198,93 @@ export class Topic {
         }
     }
 
+    /**
+     * Add message to local message cache, send to the server when the promise is resolved.
+     * If promise is null or undefined, the message will be sent immediately.
+     * The message is sent when the
+     * The message should be created by createMessage.
+     * This is probably not the final API.
+     * @param pub - Message to use as a draft.
+     * @param prom - Message will be sent when this promise is resolved, discarded if rejected.
+     */
+    publishDraft(pub: Packet<PubPacketData>, prom?: Promise<any>): Promise<any> {
+        if (!prom && !this.subscribed) {
+            return Promise.reject(new Error('Cannot publish on inactive topic'));
+        }
+
+        const seq = pub.data.seq || this.getQueuedSeqId();
+        if (!pub.noForwarding) {
+            // The 'seq', 'ts', and 'from' are added to mimic {data}. They are removed later
+            // before the message is sent.
+            pub.noForwarding = true;
+            pub.data.seq = seq;
+            pub.data.ts = new Date();
+            pub.data.from = this.tinode.getCurrentUserID();
+
+            // Don't need an echo message because the message is added to local cache right away.
+            pub.data.noecho = true;
+            // Add to cache.
+            this.messages.put(pub);
+            this.onData.next(pub);
+        }
+
+        // If promise is provided, send the queued message when it's resolved.
+        // If no promise is provided, create a resolved one and send immediately.
+        prom = (prom || Promise.resolve()).then(
+            () => {
+                if (pub.cancelled) {
+                    return {
+                        code: 300,
+                        text: 'cancelled'
+                    };
+                }
+
+                return this.publishMessage(pub);
+            },
+            (err) => {
+                this.tinode.logger('WARNING: Message draft rejected by the server', err);
+                pub.sending = false;
+                pub.failed = true;
+                this.messages.delAt(this.messages.find(pub));
+                this.onData.next();
+            });
+        return prom;
+    }
+
+    /**
+     * Leave the topic, optionally unsubscribe. Leaving the topic means the topic will stop
+     * receiving updates from the server. Unsubscribing will terminate user's relationship with the topic.
+     * Wrapper for Tinode.leave
+     * @param unsub - If true, unsubscribe, otherwise just leave.
+     */
+    async leave(unsub: boolean) {
+        // It's possible to unsubscribe (unsub==true) from inactive topic.
+        if (!this.subscribed && !unsub) {
+            return Promise.reject(new Error('Cannot leave inactive topic'));
+        }
+
+        // Send a 'leave' message, handle async response
+        const ctrl = await this.tinode.leave(this.name, unsub);
+        this.resetSub();
+        if (unsub) {
+            this.gone();
+        }
+        return ctrl;
+    }
+
+    resetSub() { }
+
+    gone() { }
+
     getType(): string {
         return '';
     }
 
     subscribe() { }
+
+    getQueuedSeqId() {
+        return 0;
+    }
 
     routeData(a: Packet<PubPacketData>) { }
 }

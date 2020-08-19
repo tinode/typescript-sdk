@@ -1252,7 +1252,7 @@ export class Tinode {
             } else if (name === TopicNames.TOPIC_FND) {
                 topic = new TopicFnd();
             } else {
-                topic = new Topic(name);
+                topic = new Topic(name, this);
             }
             // topic._new = false;
             this.cachePut('topic', name, topic);
@@ -1265,7 +1265,7 @@ export class Tinode {
      * Instantiate a new unnamed topic. An actual name will be assigned by the server
      */
     newTopic(): Topic {
-        const topic = new Topic(TopicNames.TOPIC_NEW);
+        const topic = new Topic(TopicNames.TOPIC_NEW, this);
         this.attachCacheToTopic(topic);
         return topic;
     }
@@ -1283,7 +1283,7 @@ export class Tinode {
      * @param peer - User id of the peer to start topic with.
      */
     newTopicWith(peer: string): Topic {
-        const topic = new Topic(peer);
+        const topic = new Topic(peer, this);
         this.attachCacheToTopic(topic);
         return topic;
     }

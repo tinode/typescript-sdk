@@ -8,6 +8,8 @@ export class Packet<T> {
 
     sending: boolean;
     failed: boolean;
+    cancelled: boolean;
+    noForwarding: boolean;
 
     constructor(name: string, data: T, id: string) {
         this.name = name;

@@ -101,7 +101,7 @@ export class CBuffer {
    * @param elem - element to find.
    * @param nearest - when true and exact match is not found, return the nearest element (insertion point).
    */
-  find(elem: any, nearest: boolean): number {
+  find(elem: any, nearest?: boolean): number {
     const {
       idx
     } = findNearest(elem, this.buffer, !nearest);

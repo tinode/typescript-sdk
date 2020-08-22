@@ -6,6 +6,7 @@ import { CBuffer } from '../cbuffer';
 import { Tinode } from '../tinode';
 import { Subject } from 'rxjs';
 import { Drafty } from '../drafty';
+import { GetQuery } from '../models/get-query';
 
 export class Topic {
     /**
@@ -272,6 +273,39 @@ export class Topic {
         return ctrl;
     }
 
+    /**
+     * Request topic metadata from the server.
+     * @param params - parameters
+     */
+    getMeta(params: GetQuery) {
+        // Send {get} message, return promise.
+        return this.tinode.getMeta(this.name, params);
+    }
+
+    /**
+     * Request more messages from the server
+     * @param limit - number of messages to get.
+     * @param forward - if true, request newer messages.
+     */
+    getMessagesPage(limit: number, forward: boolean) {
+        const query = this.startMetaQuery();
+        if (forward) {
+            query.withLaterData(limit);
+        } else {
+            query.withEarlierData(limit);
+        }
+        let promise = this.getMeta(query.build());
+        if (!forward) {
+            promise = promise.then((ctrl) => {
+                if (ctrl && ctrl.params && !ctrl.params.count) {
+                    this.noEarlierMsgs = true;
+                }
+            });
+        }
+        return promise;
+    }
+
+    startMetaQuery(): any { }
     resetSub() { }
 
     gone() { }

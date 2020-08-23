@@ -7,6 +7,8 @@ import { Tinode } from '../tinode';
 import { Subject } from 'rxjs';
 import { Drafty } from '../drafty';
 import { GetQuery } from '../models/get-query';
+import { SetParams } from '../models/set-params';
+import { normalizeArray } from '../utilities';
 
 export class Topic {
     /**
@@ -305,6 +307,83 @@ export class Topic {
         return promise;
     }
 
+    /**
+     * Update topic metadata.
+     * @param params - parameters to update.
+     */
+    async setMeta(params: SetParams) {
+        if (params.tags) {
+            params.tags = normalizeArray(params.tags);
+        }
+        // Send Set message, handle async response.
+        const ctrl = await this.tinode.setMeta(this.name, params)
+        if (ctrl && ctrl.code >= 300) {
+            // Not modified
+            return ctrl;
+        }
+
+        if (params.sub) {
+            params.sub.topic = this.name;
+            if (ctrl.params && ctrl.params.acs) {
+                params.sub.acs = ctrl.params.acs;
+                params.sub.updated = ctrl.ts;
+            }
+            if (!params.sub.user) {
+                // This is a subscription update of the current user.
+                // Assign user ID otherwise the update will be ignored by _processMetaSub.
+                params.sub.user = this.tinode.getCurrentUserID();
+                if (!params.desc) {
+                    // Force update to topic's asc.
+                    params.desc = {} as any;
+                }
+            }
+            params.sub.noForwarding = true;
+            this.processMetaSub([params.sub]);
+        }
+
+        if (params.desc) {
+            if (ctrl.params && ctrl.params.acs) {
+                params.desc.acs = ctrl.params.acs;
+                params.desc.updated = ctrl.ts;
+            }
+            this.processMetaDesc(params.desc);
+        }
+
+        if (params.tags) {
+            this.processMetaTags(params.tags);
+        }
+        if (params.cred) {
+            this.processMetaCreds([params.cred], true);
+        }
+
+        return ctrl;
+    }
+
+    /**
+     * Update access mode of the current user or of another topic subsriber.
+     * @param uid - UID of the user to update or null to update current user.
+     * @param update - the update value, full or delta.
+     */
+    updateMode(uid: string, update: string) {
+        const user = uid ? this.subscriber(uid) : null;
+        const am = user ?
+            user.acs.updateGiven(update).getGiven() :
+            this.getAccessMode().updateWant(update).getWant();
+
+        return this.setMeta({
+            sub: {
+                user: uid,
+                mode: am
+            }
+        });
+    }
+
+    subscriber(a: any): any { }
+    getAccessMode(): any { }
+    processMetaCreds(a: any, b: any) { }
+    processMetaTags(a: any) { }
+    processMetaSub(a: any) { }
+    processMetaDesc(a: any) { }
     startMetaQuery(): any { }
     resetSub() { }
 

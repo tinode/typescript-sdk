@@ -1,11 +1,11 @@
 import { DefAcs } from './defacs';
 
 export interface SetDesc {
-    defacs: DefAcs;
-    public: any;
-    private: any;
-    acs: any;
-    updated: any;
+    defacs?: DefAcs;
+    public?: any;
+    private?: any;
+    acs?: any;
+    updated?: any;
 }
 
 export interface SetSub {

@@ -1,6 +1,6 @@
 import { PubPacketData } from '../models/packet-data';
 import { AccessMode } from '../access-mode';
-import { AppSettings } from '../constants';
+import { AppSettings, DEL_CHAR } from '../constants';
 import { Packet } from '../models/packet';
 import { CBuffer } from '../cbuffer';
 import { Tinode } from '../tinode';
@@ -9,6 +9,7 @@ import { Drafty } from '../drafty';
 import { GetQuery } from '../models/get-query';
 import { SetParams } from '../models/set-params';
 import { normalizeArray } from '../utilities';
+import { DelRange } from '../models/del-range';
 
 export class Topic {
     /**
@@ -378,6 +379,125 @@ export class Topic {
         });
     }
 
+    /**
+     * Create new topic subscription. Wrapper for Tinode.setMeta.
+     * @param userId - ID of the user to invite
+     * @param mode - Access mode. <tt>null</tt> means to use default.
+     */
+    invite(userId: string, mode: string): Promise<any> {
+        return this.setMeta({
+            sub: {
+                user: userId,
+                mode,
+            }
+        });
+    }
+
+    /**
+     * Archive or un-archive the topic. Wrapper for Tinode.setMeta.
+     * @param arch - true to archive the topic, false otherwise
+     */
+    archive(arch: boolean) {
+        if (this.private && this.private.arch === arch) {
+            return Promise.resolve(arch);
+        }
+        return this.setMeta({
+            desc: {
+                private: {
+                    arch: arch ? true : DEL_CHAR
+                }
+            }
+        });
+    }
+
+    /**
+     * Delete messages. Hard-deleting messages requires Owner permission.
+     * @param ranges - Ranges of message IDs to delete.
+     * @param hard - Hard or soft delete
+     */
+    delMessages(ranges: DelRange[], hard?: boolean) {
+        if (!this.subscribed) {
+            return Promise.reject(new Error('Cannot delete messages in inactive topic'));
+        }
+
+        // Sort ranges in ascending order by low, the descending by hi.
+        ranges.sort((r1, r2) => {
+            if (r1.low < r2.low) {
+                return 1;
+            }
+            if (r1.low === r2.low) {
+                return !r2.hi || (r1.hi >= r2.hi) === true ? 1 : -1;
+            }
+            return -1;
+        });
+
+        // Remove pending messages from ranges possibly clipping some ranges.
+        const tosend = ranges.reduce((out, r) => {
+            if (r.low < AppSettings.LOCAL_SEQ_ID) {
+                if (!r.hi || r.hi < AppSettings.LOCAL_SEQ_ID) {
+                    out.push(r);
+                } else {
+                    // Clip hi to max allowed value.
+                    out.push({
+                        low: r.low,
+                        hi: this.maxSeq + 1
+                    });
+                }
+            }
+            return out;
+        }, []);
+
+        // Send {del} message, return promise
+        let result;
+        if (tosend.length > 0) {
+            result = this.tinode.delMessages(this.name, tosend, hard);
+        } else {
+            result = Promise.resolve({
+                params: {
+                    del: 0
+                }
+            });
+        }
+
+        return result.then((ctrl) => {
+            if (ctrl.params.del > this.maxDel) {
+                this.maxDel = ctrl.params.del;
+            }
+
+            ranges.forEach((r) => {
+                if (r.hi) {
+                    this.flushMessageRange(r.low, r.hi);
+                } else {
+                    this.flushMessage(r.low);
+                }
+            });
+
+            this.updateDeletedRanges();
+            // Calling with no parameters to indicate the messages were deleted.
+            this.onData.next();
+            return ctrl;
+        });
+    }
+
+    /**
+     *  Delete all messages. Hard-deleting messages requires Owner permission.
+     * @param hard - true if messages should be hard-deleted.
+     */
+    delMessagesAll(hard?: boolean) {
+        if (!this.maxSeq || this.maxSeq <= 0) {
+            // There are no messages to delete.
+            return Promise.resolve();
+        }
+        return this.delMessages([{
+            low: 1,
+            hi: this.maxSeq + 1,
+            all: true
+        }], hard);
+    }
+
+    flushMessage(a: any) { }
+    updateDeletedRanges() { }
+    flushMessageRange(a: any, b: any) { }
     subscriber(a: any): any { }
     getAccessMode(): any { }
     processMetaCreds(a: any, b: any) { }

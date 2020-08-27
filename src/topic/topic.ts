@@ -495,6 +495,73 @@ export class Topic {
         }], hard);
     }
 
+    /**
+     * Delete multiple messages defined by their IDs. Hard-deleting messages requires Owner permission.
+     * @param list - list of seq IDs to delete
+     * @param hard - true if messages should be hard-deleted.
+     */
+    delMessagesList(list: DelRange[], hard?: boolean) {
+        // Sort the list in ascending order
+        // FIXME: Can not sort this array like this
+        // list.sort((a, b) => a - b);
+
+
+        // Convert the array of IDs to ranges.
+        const ranges = list.reduce((out, id) => {
+            if (out.length === 0) {
+                // First element.
+                out.push({
+                    low: id
+                });
+            } else {
+                const prev = out[out.length - 1];
+                if ((!prev.hi && (id !== prev.low + 1)) || (id > prev.hi)) {
+                    // New range.
+                    out.push({
+                        low: id
+                    });
+                } else {
+                    // Expand existing range.
+                    // FIXME: Operator '+' cannot be applied to types 'DelRange' and 'number'.
+                    // prev.hi = prev.hi ? Math.max(prev.hi, id + 1) : id + 1;
+                }
+            }
+            return out;
+        }, []);
+
+        // Send {del} message, return promise
+        return this.delMessages(ranges, hard);
+    }
+
+    /**
+     *  Delete topic. Requires Owner permission. Wrapper for delTopic
+     * @param hard - had-delete topic.
+     */
+    async delTopic(hard?: boolean): Promise<any> {
+        const ctrl = await this.tinode.delTopic(this.name, hard);
+        this.resetSub();
+        this.gone();
+        return ctrl;
+    }
+
+    /**
+     * Delete subscription. Requires Share permission. Wrapper for Tinode.delSubscription
+     * @param user - ID of the user to remove subscription for.
+     */
+    async delSubscription(user: string): Promise<any> {
+        if (!this.subscribed) {
+            return Promise.reject(new Error('Cannot delete subscription in inactive topic'));
+        }
+
+        // Send {del} message, return promise
+        const ctrl = await this.tinode.delSubscription(this.name, user);
+        // Remove the object from the subscription cache;
+        delete this.users[user];
+        // Notify listeners
+        this.onSubsUpdated.next(Object.keys(this.users));
+        return ctrl;
+    }
+
     flushMessage(a: any) { }
     updateDeletedRanges() { }
     flushMessageRange(a: any, b: any) { }

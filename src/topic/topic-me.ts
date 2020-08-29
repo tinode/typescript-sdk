@@ -6,4 +6,6 @@ export class TopicMe {
             online: false,
         };
     }
+
+    setMsgReadRecv(a, b, d) { }
 }

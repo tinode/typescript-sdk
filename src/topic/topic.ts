@@ -562,10 +562,123 @@ export class Topic {
         return ctrl;
     }
 
+    /**
+     * Send a read/recv notification
+     * @param what - what notification to send: <tt>recv</tt>, <tt>read</tt>.
+     * @param seq - ID or the message read or received.
+     */
+    note(what: string, seq: number) {
+        const user = this.users[this.tinode.getCurrentUserID()];
+        if (user) {
+            if (!user[what] || user[what] < seq) {
+                if (this.subscribed) {
+                    this.tinode.note(this.name, what, seq);
+                } else {
+                    this.tinode.logger('INFO: Not sending {note} on inactive topic');
+                }
+
+                user[what] = seq;
+            }
+        } else {
+            this.tinode.logger('ERROR: note(): user not found ' + this.tinode.getCurrentUserID());
+        }
+
+        // Update locally cached contact with the new count
+        const me = this.tinode.getMeTopic();
+        if (me) {
+            me.setMsgReadRecv(this.name, what, seq);
+        }
+    }
+
+    /**
+     * Send a 'recv' receipt. Wrapper for Tinode.noteRecv.
+     * @param seq - ID of the message to acknowledge.
+     */
+    noteRecv(seq: number) {
+        this.note('recv', seq);
+    }
+
+    /**
+     * Send a 'read' receipt. Wrapper for Tinode.noteRead.
+     * @param seq - ID of the message to acknowledge or 0/undefined to acknowledge the latest messages.
+     */
+    noteRead(seq: number) {
+        seq = seq || this.maxSeq;
+        if (seq > 0) {
+            this.note('read', seq);
+        }
+    }
+
+    /**
+     * Send a key-press notification. Wrapper for Tinode.noteKeyPress.
+     */
+    noteKeyPress() {
+        if (this.subscribed) {
+            this.tinode.noteKeyPress(this.name);
+        } else {
+            this.tinode.logger('INFO: Cannot send notification in inactive topic');
+        }
+    }
+
+    /**
+     * Get user description from global cache. The user does not need to be a
+     * subscriber of this topic.
+     * @param uid - ID of the user to fetch.
+     */
+    userDesc(uid: string) {
+        // TODO(gene): handle asynchronous requests
+        const user = this.cacheGetUser(uid);
+        if (user) {
+            return user; // Promise.resolve(user)
+        }
+    }
+
+    /**
+     * Get description of the p2p peer from subscription cache.
+     */
+    p2pPeerDesc() {
+        if (this.getType() !== 'p2p') {
+            return undefined;
+        }
+        return this.users[this.name];
+    }
+
+    /**
+     * Iterate over cached subscribers. If callback is undefined, use this.onMetaSub.
+     * @param callback - Callback which will receive subscribers one by one.
+     * @param context - Value of `this` inside the `callback`.
+     */
+    subscribers(callback, context) {
+        const cb = (callback || this.onMetaSub);
+        if (cb) {
+            for (let idx in this.users) {
+                if (idx) {
+                    cb.call(context, this.users[idx], idx, this.users);
+                }
+            }
+        }
+    }
+
+    /**
+     * Get a copy of cached tags.
+     */
+    getTags() {
+        // Return a copy.
+        return this.tags.slice(0);
+    }
+
+    /**
+     * Get cached subscription for the given user ID.
+     * @param uid - id of the user to query for
+     */
+    subscriber(uid: string) {
+        return this.users[uid];
+    }
+
+    cacheGetUser(a): any { }
     flushMessage(a: any) { }
     updateDeletedRanges() { }
     flushMessageRange(a: any, b: any) { }
-    subscriber(a: any): any { }
     getAccessMode(): any { }
     processMetaCreds(a: any, b: any) { }
     processMetaTags(a: any) { }

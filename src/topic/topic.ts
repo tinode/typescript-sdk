@@ -99,6 +99,7 @@ export class Topic {
      * per-topic public data
      */
     public: any = null;
+    seq: number;
 
     // Topic events
     onData = new Subject<any>();
@@ -317,7 +318,7 @@ export class Topic {
             params.tags = normalizeArray(params.tags);
         }
         // Send Set message, handle async response.
-        const ctrl = await this.tinode.setMeta(this.name, params)
+        const ctrl = await this.tinode.setMeta(this.name, params);
         if (ctrl && ctrl.code >= 300) {
             // Not modified
             return ctrl;
@@ -651,7 +652,7 @@ export class Topic {
     subscribers(callback, context) {
         const cb = (callback || this.onMetaSub);
         if (cb) {
-            for (let idx in this.users) {
+            for (const idx in this.users) {
                 if (idx) {
                     cb.call(context, this.users[idx], idx, this.users);
                 }
@@ -673,6 +674,98 @@ export class Topic {
      */
     subscriber(uid: string) {
         return this.users[uid];
+    }
+
+    /**
+     * Iterate over cached messages. If callback is undefined, use this.onData.
+     * @param callback - Callback which will receive messages one by one.
+     * @param sinceId - Optional seqId to start iterating from (inclusive)
+     * @param beforeId - Optional seqId to stop iterating before (exclusive).
+     * @param context - Value of `this` inside the `callback`.
+     */
+    getMessages(callback: any, sinceId?: number, beforeId?: number, context?: any) {
+        const cb = (callback || this.onData);
+        if (cb) {
+            const startIdx = typeof sinceId === 'number' ? this.messages.find({
+                seq: sinceId
+            }, true) : undefined;
+            const beforeIdx = typeof beforeId === 'number' ? this.messages.find({
+                seq: beforeId
+            }, true) : undefined;
+            if (startIdx !== -1 && beforeIdx !== -1) {
+                this.messages.forEach(cb, startIdx, beforeIdx, context);
+            }
+        }
+    }
+
+    /**
+     * Iterate over cached unsent messages.
+     * @param callback - Callback which will receive messages one by one.
+     * @param context - Value of `this` inside the `callback`.
+     */
+    queuedMessages(callback: any, context?: any) {
+        if (!callback) {
+            throw new Error('Callback must be provided');
+        }
+        this.getMessages(callback, AppSettings.LOCAL_SEQ_ID, undefined, context);
+    }
+
+    /**
+     * Get the number of topic subscribers who marked this message as either recv or read
+     * Current user is excluded from the count.
+     * @param what - what notification to send: recv, read.
+     * @param seq - ID or the message read or received.
+     */
+    msgReceiptCount(what: string, seq: number) {
+        let count = 0;
+        if (seq > 0) {
+            const me = this.tinode.getCurrentUserID();
+            for (const idx in this.users) {
+                if (idx) {
+                    const user = this.users[idx];
+                    if (user.user !== me && user[what] >= seq) {
+                        count++;
+                    }
+                }
+            }
+        }
+        return count;
+    }
+
+    /**
+     * Get the number of topic subscribers who marked this message (and all older messages) as read.
+     * The current user is excluded from the count.
+     * @param seq - Message id to check.
+     */
+    msgReadCount(seq: number) {
+        return this.msgReceiptCount('read', seq);
+    }
+
+    /**
+     * Get the number of topic subscribers who marked this message (and all older messages) as received.
+     * The current user is excluded from the count.
+     * @param seq - Message id to check.
+     */
+    msgRecvCount(seq: number) {
+        return this.msgReceiptCount('recv', seq);
+    }
+
+    /**
+     * Check if cached message IDs indicate that the server may have more messages.
+     * @param newer - Check for newer messages
+     */
+    msgHasMoreMessages(newer?: boolean) {
+        return newer ? this.seq > this.maxSeq :
+            // minSeq could be more than 1, but earlier messages could have been deleted.
+            (this.minSeq > 1 && !this.noEarlierMsgs);
+    }
+
+    /**
+     * Check if the given seq Id is id of the most recent message.
+     * @param seqId - id of the message to check
+     */
+    isNewMessage(seqId: number) {
+        return this.maxSeq <= seqId;
     }
 
     cacheGetUser(a): any { }

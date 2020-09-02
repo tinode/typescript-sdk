@@ -1,6 +1,6 @@
 import { PubPacketData } from '../models/packet-data';
 import { AccessMode } from '../access-mode';
-import { AppSettings, DEL_CHAR } from '../constants';
+import { AppSettings, DEL_CHAR, MessageStatus } from '../constants';
 import { Packet } from '../models/packet';
 import { CBuffer } from '../cbuffer';
 import { Tinode } from '../tinode';
@@ -10,6 +10,7 @@ import { GetQuery } from '../models/get-query';
 import { SetParams } from '../models/set-params';
 import { normalizeArray } from '../utilities';
 import { DelRange } from '../models/del-range';
+import { MetaGetBuilder } from '../meta-get-builder';
 
 export class Topic {
     /**
@@ -768,23 +769,119 @@ export class Topic {
         return this.maxSeq <= seqId;
     }
 
+    /**
+     * Remove one message from local cache.
+     * @param seqId id of the message to remove from cache.
+     */
+    flushMessage(seqId: number) {
+        const idx = this.messages.find({
+            seq: seqId
+        });
+        return idx >= 0 ? this.messages.delAt(idx) : undefined;
+    }
+
+    /**
+     * Remove a range of messages from the local cache.
+     * @param fromId seq ID of the first message to remove (inclusive).
+     * @param untilId seqID of the last message to remove (exclusive).
+     */
+    flushMessageRange(fromId: number, untilId: number) {
+        // start, end: find insertion points (nearest == true).
+        const since = this.messages.find({
+            seq: fromId
+        }, true);
+        return since >= 0 ? this.messages.delRange(since, this.messages.find({
+            seq: untilId
+        }, true)) : [];
+    }
+
+    /**
+     * Attempt to stop message from being sent.
+     * @param seqId id of the message to stop sending and remove from cache.
+     */
+    cancelSend(seqId: number): boolean {
+        const idx = this.messages.find({
+            seq: seqId
+        });
+        if (idx >= 0) {
+            const msg = this.messages.getAt(idx);
+            const status = this.msgStatus(msg);
+            if (status === MessageStatus.QUEUED || status === MessageStatus.FAILED) {
+                msg.cancelled = true;
+                this.messages.delAt(idx);
+                // Calling with no parameters to indicate the message was deleted.
+                this.onData.next();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Get type of the topic: me, p2p, grp, fnd...
+     */
+    getType(): string {
+        return this.name;
+    }
+
+    /**
+     * Get user's cumulative access mode of the topic.
+     */
+    getAccessMode() {
+        return this.acs;
+    }
+
+    /**
+     * Initialize new meta Tinode.GetQuery builder. The query is attached to the current topic.
+     * It will not work correctly if used with a different topic.
+     */
+    startMetaQuery() {
+        return new MetaGetBuilder(this.tinode, this);
+    }
+
+    /**
+     * heck if topic is archived, i.e. private.arch == true.
+     */
+    isArchived() {
+        return this.private && this.private.arch ? true : false;
+    }
+
+    /**
+     * Get status (queued, sent, received etc) of a given message in the context
+     * of this topic.
+     */
+    msgStatus(msg: any) {
+        let status = MessageStatus.NONE;
+        if (this.tinode.isMe(msg.from)) {
+            if (msg.sending) {
+                status = MessageStatus.SENDING;
+            } else if (msg.failed) {
+                status = MessageStatus.FAILED;
+            } else if (msg.seq >= AppSettings.LOCAL_SEQ_ID) {
+                status = MessageStatus.QUEUED;
+            } else if (this.msgReadCount(msg.seq) > 0) {
+                status = MessageStatus.READ;
+            } else if (this.msgRecvCount(msg.seq) > 0) {
+                status = MessageStatus.RECEIVED;
+            } else if (msg.seq > 0) {
+                status = MessageStatus.SENT;
+            }
+        } else {
+            status = MessageStatus.TO_ME;
+        }
+        return status;
+    }
+
+
     cacheGetUser(a): any { }
-    flushMessage(a: any) { }
     updateDeletedRanges() { }
-    flushMessageRange(a: any, b: any) { }
-    getAccessMode(): any { }
     processMetaCreds(a: any, b: any) { }
     processMetaTags(a: any) { }
     processMetaSub(a: any) { }
     processMetaDesc(a: any) { }
-    startMetaQuery(): any { }
     resetSub() { }
 
     gone() { }
-
-    getType(): string {
-        return '';
-    }
 
     subscribe() { }
 

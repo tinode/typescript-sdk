@@ -7,5 +7,5 @@ export class TopicMe {
         };
     }
 
-    setMsgReadRecv(a, b, d) { }
+    setMsgReadRecv(contactName, what, seq, ts?) { }
 }

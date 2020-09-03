@@ -872,14 +872,72 @@ export class Topic {
         return status;
     }
 
+    /**
+     * Process data message
+     * @param data data
+     */
+    routeData(data: Packet<PubPacketData>) {
+        if (data.data.content) {
+            if (!this.touched || this.touched < data.data.ts) {
+                this.touched = data.data.ts;
+            }
+        }
+
+        if (data.data.seq > this.maxSeq) {
+            this.maxSeq = data.data.seq;
+        }
+        if (data.data.seq < this.minSeq || this.minSeq === 0) {
+            this.minSeq = data.data.seq;
+        }
+
+        if (!data.noForwarding) {
+            this.messages.put(data);
+            this.updateDeletedRanges();
+        }
+
+        this.onData.next(data);
+
+        // Update locally cached contact with the new message count.
+        const me = this.tinode.getMeTopic();
+        if (me) {
+            // Messages from the current user are considered to be read already.
+            me.setMsgReadRecv(this.name,
+                (!data.data.from || this.tinode.isMe(data.data.from)) ? 'read' : 'msg', data.data.seq, data.data.ts);
+        }
+    }
+
+    /**
+     * Process metadata message
+     */
+    routeMeta(meta: any) {
+        if (meta.desc) {
+            this.lastDescUpdate = meta.ts;
+            this.processMetaDesc(meta.desc);
+        }
+        if (meta.sub && meta.sub.length > 0) {
+            this.lastSubsUpdate = meta.ts;
+            this.processMetaSub(meta.sub);
+        }
+        if (meta.del) {
+            this.processDelMessages(meta.del.clear, meta.del.delseq);
+        }
+        if (meta.tags) {
+            this.processMetaTags(meta.tags);
+        }
+        if (meta.cred) {
+            this.processMetaCreds(meta.cred);
+        }
+        this.onMeta.next(meta);
+    }
 
     cacheGetUser(a): any { }
     updateDeletedRanges() { }
-    processMetaCreds(a: any, b: any) { }
+    processMetaCreds(a: any, b?: any) { }
     processMetaTags(a: any) { }
     processMetaSub(a: any) { }
     processMetaDesc(a: any) { }
     resetSub() { }
+    processDelMessages(a, b) { }
 
     gone() { }
 
@@ -888,6 +946,4 @@ export class Topic {
     getQueuedSeqId() {
         return 0;
     }
-
-    routeData(a: Packet<PubPacketData>) { }
 }

@@ -1,16 +1,16 @@
-import { PubPacketData } from '../models/packet-data';
-import { AccessMode } from '../access-mode';
 import { AppSettings, DEL_CHAR, MessageStatus } from '../constants';
+import { PubPacketData } from '../models/packet-data';
+import { MetaGetBuilder } from '../meta-get-builder';
+import { SetParams } from '../models/set-params';
+import { GetQuery } from '../models/get-query';
+import { DelRange } from '../models/del-range';
+import { normalizeArray } from '../utilities';
+import { AccessMode } from '../access-mode';
 import { Packet } from '../models/packet';
 import { CBuffer } from '../cbuffer';
+import { Drafty } from '../drafty';
 import { Tinode } from '../tinode';
 import { Subject } from 'rxjs';
-import { Drafty } from '../drafty';
-import { GetQuery } from '../models/get-query';
-import { SetParams } from '../models/set-params';
-import { normalizeArray } from '../utilities';
-import { DelRange } from '../models/del-range';
-import { MetaGetBuilder } from '../meta-get-builder';
 
 export class Topic {
     /**
@@ -908,6 +908,7 @@ export class Topic {
 
     /**
      * Process metadata message
+     * TODO determine input value type
      */
     routeMeta(meta: any) {
         if (meta.desc) {

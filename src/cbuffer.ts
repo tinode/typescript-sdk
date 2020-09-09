@@ -88,7 +88,7 @@ export class CBuffer {
    * @param beforeIdx - Optional index to stop iterating before (exclusive).
    * @param context - calling context (i.e. value of 'this' in callback)
    */
-  forEach(callback: CallableFunction, startIdx: number, beforeIdx: number, context: any): void {
+  forEach(callback: CallableFunction, startIdx?: number, beforeIdx?: number, context?: any): void {
     startIdx = startIdx | 0;
     beforeIdx = beforeIdx || this.buffer.length;
     for (let i = startIdx; i < beforeIdx; i++) {

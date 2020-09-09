@@ -1,10 +1,10 @@
-import { AppSettings, DEL_CHAR, MessageStatus } from '../constants';
+import { AppSettings, DEL_CHAR, MessageStatus, AccessModeFlags, TopicNames } from '../constants';
+import { normalizeArray, mergeObj, stringToDate, mergeToCache } from '../utilities';
 import { PubPacketData } from '../models/packet-data';
 import { MetaGetBuilder } from '../meta-get-builder';
 import { SetParams } from '../models/set-params';
 import { GetQuery } from '../models/get-query';
 import { DelRange } from '../models/del-range';
-import { normalizeArray } from '../utilities';
 import { AccessMode } from '../access-mode';
 import { Packet } from '../models/packet';
 import { CBuffer } from '../cbuffer';
@@ -101,6 +101,8 @@ export class Topic {
      */
     public: any = null;
     seq: number;
+    updated: any;
+    clear: any;
 
     // Topic events
     onData = new Subject<any>();
@@ -931,20 +933,348 @@ export class Topic {
         this.onMeta.next(meta);
     }
 
-    cacheGetUser(a): any { }
-    updateDeletedRanges() { }
-    processMetaCreds(a: any, b?: any) { }
-    processMetaTags(a: any) { }
-    processMetaSub(a: any) { }
-    processMetaDesc(a: any) { }
-    resetSub() { }
-    processDelMessages(a, b) { }
+    /**
+     * Process presence change message
+     * TODO determine input value type
+     */
+    routePres(pres: any) {
+        let user: any;
+        switch (pres.what) {
+            case 'del':
+                // Delete cached messages.
+                this.processDelMessages(pres.clear, pres.delseq);
+                break;
+            case 'on':
+            case 'off':
+                // Update online status of a subscription.
+                user = this.users[pres.src];
+                if (user) {
+                    user.online = pres.what === 'on';
+                } else {
+                    this.tinode.logger('WARNING: Presence update for an unknown user', this.name, pres.src);
+                }
+                break;
+            case 'term':
+                // Attachment to topic is terminated probably due to cluster rehashing.
+                this.resetSub();
+                break;
+            case 'acs':
+                const uid = pres.src || this.tinode.getCurrentUserID();
+                user = this.users[uid];
+                if (!user) {
+                    // Update for an unknown user: notification of a new subscription.
+                    const acs = new AccessMode().updateAll(pres.dacs);
+                    if (acs && acs.mode !== AccessModeFlags.NONE) {
+                        user = this.cacheGetUser(uid);
+                        if (!user) {
+                            user = {
+                                user: uid,
+                                acs,
+                            };
+                            this.getMeta(this.startMetaQuery().withOneSub(undefined, uid).build());
+                        } else {
+                            user.acs = acs;
+                        }
+                        user.updated = new Date();
+                        this.processMetaSub([user]);
+                    }
+                } else {
+                    // Known user
+                    user.acs.updateAll(pres.dacs);
+                    // Update user's access mode.
+                    this.processMetaSub([{
+                        user: uid,
+                        updated: new Date(),
+                        acs: user.acs
+                    }]);
+                }
+                break;
+            default:
+                this.tinode.logger('INFO: Ignored presence update', pres.what);
+        }
 
-    gone() { }
-
-    subscribe() { }
-
-    getQueuedSeqId() {
-        return 0;
+        this.onPres.next(pres);
     }
+
+    /**
+     * Process {info} message
+     * TODO determine input value type
+     */
+    routeInfo(info: any) {
+        if (info.what !== 'kp') {
+            const user = this.users[info.from];
+            if (user) {
+                user[info.what] = info.seq;
+                if (user.recv < user.read) {
+                    user.recv = user.read;
+                }
+            }
+
+            // If this is an update from the current user, update the contact with the new count too.
+            if (this.tinode.isMe(info.from)) {
+                const me = this.tinode.getMeTopic();
+                if (me) {
+                    me.setMsgReadRecv(info.topic, info.what, info.seq);
+                }
+            }
+        }
+
+        this.onInfo.next(info);
+    }
+
+    // Called by Tinode when meta.desc packet is received.
+    // Called by 'me' topic on contact update (desc._noForwarding is true).
+    processMetaDesc(desc: any) {
+        // Synthetic desc may include defacs for p2p topics which is useless.
+        // Remove it.
+        if (this.getType() === 'p2p') {
+            delete desc.defacs;
+        }
+
+        // Copy parameters from desc object to this topic.
+        mergeObj(this, desc);
+        // Make sure date fields are Date().
+        stringToDate(this);
+
+        // Update relevant contact in the me topic, if available:
+        if (this.name !== TopicNames.TOPIC_ME && !desc._noForwarding) {
+            const me = this.tinode.getMeTopic();
+            if (me) {
+                // Must use original 'desc' instead of 'this' so not to lose DEL_CHAR.
+                me.processMetaSub([{
+                    _noForwarding: true,
+                    topic: this.name,
+                    updated: this.updated,
+                    touched: this.touched,
+                    acs: desc.acs,
+                    seq: desc.seq,
+                    read: desc.read,
+                    recv: desc.recv,
+                    public: desc.public,
+                    private: desc.private
+                }]);
+            }
+        }
+
+        this.onMetaDesc.next(this);
+    }
+
+    // Called by Tinode when meta.sub is recived or in response to received
+    // {ctrl} after setMeta-sub.
+    processMetaSub(subs: any) {
+        for (let idx in subs) {
+            if (idx) {
+                const sub = subs[idx];
+
+                sub.updated = new Date(sub.updated);
+                sub.deleted = sub.deleted ? new Date(sub.deleted) : null;
+
+                let user = null;
+                if (!sub.deleted) {
+                    // If this is a change to user's own permissions, update them in topic too.
+                    // Desc will update 'me' topic.
+                    if (this.tinode.isMe(sub.user) && sub.acs) {
+                        this.processMetaDesc({
+                            updated: sub.updated || new Date(),
+                            touched: sub.updated,
+                            acs: sub.acs
+                        });
+                    }
+                    user = this.updateCachedUser(sub.user, sub);
+                } else {
+                    // Subscription is deleted, remove it from topic (but leave in Users cache)
+                    delete this.users[sub.user];
+                    user = sub;
+                }
+
+                this.onMetaSub.next(user);
+            }
+        }
+
+        if (this.onSubsUpdated) {
+            this.onSubsUpdated.next(Object.keys(this.users));
+        }
+    }
+
+    // Called by Tinode when meta.tags is received.
+    processMetaTags(tags: any) {
+        if (tags.length === 1 && tags[0] === DEL_CHAR) {
+            tags = [];
+        }
+        this.tags = tags;
+        this.onTagsUpdated.next(tags);
+    }
+
+    // Do nothing for topics other than 'me'
+    processMetaCreds(creds: any) { }
+
+    // Delete cached messages and update cached transaction IDs
+    processDelMessages(clear: any, delseq: any) {
+        this.maxDel = Math.max(clear, this.maxDel);
+        this.clear = Math.max(clear, this.clear);
+        const topic = this;
+        let count = 0;
+        if (Array.isArray(delseq)) {
+            delseq.forEach((range) => {
+                if (!range.hi) {
+                    count++;
+                    topic.flushMessage(range.low);
+                } else {
+                    for (let i = range.low; i < range.hi; i++) {
+                        count++;
+                        topic.flushMessage(i);
+                    }
+                }
+            });
+        }
+
+        if (count > 0) {
+            this.updateDeletedRanges();
+            this.onData.next();
+        }
+    }
+
+    // Topic is informed that the entire response to {get what=data} has been received.
+    allMessagesReceived(count: any) {
+        this.updateDeletedRanges();
+        this.onAllMessagesReceived.next(count);
+    }
+
+    // Reset subscribed state
+    resetSub() {
+        this.subscribed = false;
+    }
+
+    // This topic is either deleted or unsubscribed from.
+    gone() {
+        this.messages.reset();
+        this.users = {};
+        this.acs = new AccessMode(null);
+        this.private = null;
+        this.public = null;
+        this.maxSeq = 0;
+        this.minSeq = 0;
+        this.subscribed = false;
+
+        const me = this.tinode.getMeTopic();
+        if (me) {
+            me.routePres({
+                noForwarding: true,
+                what: 'gone',
+                topic: TopicNames.TOPIC_ME,
+                src: this.name
+            });
+        }
+        this.onDeleteTopic.next();
+    }
+
+    // Update global user cache and local subscribers cache.
+    // Don't call this method for non-subscribers.
+    updateCachedUser(uid: any, obj: any) {
+        // Fetch user object from the global cache.
+        // This is a clone of the stored object
+        let cached = this.cacheGetUser(uid);
+        cached = mergeObj(cached || {}, obj);
+        // Save to global cache
+        this.cachePutUser(uid, cached);
+        // Save to the list of topic subscribers.
+        return mergeToCache(this.users, uid, cached);
+    }
+
+    // Get local seqId for a queued message.
+    getQueuedSeqId() {
+        return this.queuedSeqId++;
+    }
+
+    // Calculate ranges of missing messages.
+    updateDeletedRanges() {
+        const ranges = [];
+
+        let prev = null;
+        // Check for gap in the beginning, before the first message.
+        const first = this.messages.getAt(0);
+        if (first && this.minSeq > 1 && !this.noEarlierMsgs) {
+            // Some messages are missing in the beginning.
+            if (first.hi) {
+                // The first message already represents a gap.
+                if (first.seq > 1) {
+                    first.seq = 1;
+                }
+                if (first.hi < this.minSeq - 1) {
+                    first.hi = this.minSeq - 1;
+                }
+                prev = first;
+            } else {
+                // Create new gap.
+                prev = {
+                    seq: 1,
+                    hi: this.minSeq - 1
+                };
+                ranges.push(prev);
+            }
+        } else {
+            // No gap in the beginning.
+            prev = {
+                seq: 0,
+                hi: 0
+            };
+        }
+
+        // Find gaps in the list of received messages. The list contains messages-proper as well
+        // as placeholders for deleted ranges.
+        // The messages are iterated by seq ID in ascending order.
+        this.messages.forEach((data) => {
+            // Do not create a gap between the last sent message and the first unsent.
+            if (data.seq >= AppSettings.LOCAL_SEQ_ID) {
+                return;
+            }
+
+            // New message is reducing the existing gap
+            if (data.seq === (prev.hi || prev.seq) + 1) {
+                // No new gap. Replace previous with current.
+                prev = data;
+                return;
+            }
+
+            // Found a new gap.
+            if (prev.hi) {
+                // Previous is also a gap, alter it.
+                prev.hi = data.hi || data.seq;
+                return;
+            }
+
+            // Previous is not a gap. Create a new gap.
+            prev = {
+                seq: (prev.hi || prev.seq) + 1,
+                hi: data.hi || data.seq
+            };
+            ranges.push(prev);
+        });
+
+        // Check for missing messages at the end.
+        // All messages could be missing or it could be a new topic with no messages.
+        const last = this.messages.getLast();
+        const maxSeq = Math.max(this.seq, this.maxSeq) || 0;
+        if ((maxSeq > 0 && !last) || (last && ((last.hi || last.seq) < maxSeq))) {
+            if (last && last.hi) {
+                // Extend existing gap
+                last.hi = maxSeq;
+            } else {
+                // Create new gap.
+                ranges.push({
+                    seq: last ? last.seq + 1 : 1,
+                    hi: maxSeq
+                });
+            }
+        }
+
+        // Insert new gaps into cache.
+        ranges.forEach((gap) => {
+            this.messages.put(gap);
+        });
+    }
+
+    cacheGetUser(a): any { }
+    subscribe() { }
+    cachePutUser(a, b) { }
 }

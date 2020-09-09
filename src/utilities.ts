@@ -183,7 +183,7 @@ export function mergeObj(dst: any, src: any, ignore = false) {
 /**
  * Update object stored in a cache. Returns updated value.
  */
-export function mergeToCache(cache: any, key: string, newValue: any, ignore: boolean) {
+export function mergeToCache(cache: any, key: string, newValue: any, ignore?: boolean) {
     cache[key] = mergeObj(cache[key], newValue, ignore);
     return cache[key];
 }

@@ -6,9 +6,9 @@ import { AccessModeFlags, AccessModePermissionsBITMASK } from './constants';
 export class AccessMode {
     private given: number;
     private want: number;
-    private mode: number;
+    mode: number;
 
-    constructor(acs) {
+    constructor(acs?) {
         if (acs) {
             this.given = typeof acs.given === 'number' ? acs.given : AccessMode.decode(acs.given);
             this.want = typeof acs.want === 'number' ? acs.want : AccessMode.decode(acs.want);

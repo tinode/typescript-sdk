@@ -8,4 +8,6 @@ export class TopicMe {
     }
 
     setMsgReadRecv(contactName, what, seq, ts?) { }
+    routePres(a) { }
+    processMetaSub(a: any) { }
 }

@@ -36,15 +36,15 @@ export interface BackoffSettings {
     /**
      * Minimum delay between reconnects
      */
-    BOFF_BASE: number;
+    backOffBaseDelay: number;
     /**
      * Maximum delay between reconnects 2^10 * 2000 ~ 34 minutes
      */
-    BOFF_MAX_ITER: number;
+    backOffMaxIteration: number;
     /**
-     * Add random delay
+     * Add random delay used to prevent clients reconnecting all at the same time
      */
-    BOFF_JITTER: number;
+    backOffJitter: number;
 }
 
 /**
@@ -59,6 +59,12 @@ export interface AutoReconnectData {
  * On disconnect event data
  */
 export interface OnDisconnetData {
+    /**
+     * A descriptive error for client
+     */
     error: Error;
+    /**
+     * Error code
+     */
     code: number;
 }

@@ -213,11 +213,11 @@ export class Tinode {
 
         switch (connectionConfig.transport) {
             case 'lp':
-                this.connection = new LPConnection(connectionConfig);
+                this.connection = new LPConnection(this.connectionConfig);
                 break;
 
             case 'ws':
-                this.connection = new WSConnection(connectionConfig);
+                this.connection = new WSConnection(this.connectionConfig);
                 break;
 
             default:
@@ -321,15 +321,14 @@ export class Tinode {
     }
 
     /**
-     * REVIEW: Add Types
      * Make limited cache management available to topic.
      * Caching user.public only. Everything else is per-topic.
      * @param topic - Topic to attach cache
      */
-    private attachCacheToTopic(topic: any) {
-        topic._tinode = this;
+    private attachCacheToTopic(topic: Topic) {
+        topic.tinode = this;
 
-        topic._cacheGetUser = (uid) => {
+        topic.cacheGetUser = (uid) => {
             const pub = this.cacheGet('user', uid);
             if (pub) {
                 return {
@@ -339,16 +338,16 @@ export class Tinode {
             }
             return undefined;
         };
-        topic._cachePutUser = (uid, user) => {
+        topic.cachePutUser = (uid, user) => {
             return this.cachePut('user', uid, mergeObj({}, user.public));
         };
-        topic._cacheDelUser = (uid) => {
+        topic.cacheDelUser = (uid) => {
             return this.cacheDel('user', uid);
         };
-        topic._cachePutSelf = () => {
+        topic.cachePutSelf = () => {
             return this.cachePut('topic', topic.name, topic);
         };
-        topic._cacheDelSelf = () => {
+        topic.cacheDelSelf = () => {
             return this.cacheDel('topic', topic.name);
         };
     }
@@ -426,7 +425,7 @@ export class Tinode {
     /**
      * Generator of packets stubs
      */
-    private initPacket(type: PacketTypes, topic?: string): Packet<any> {
+    private initPacket(type: PacketTypes, topicName?: string): Packet<any> {
         switch (type) {
             case PacketTypes.Hi:
                 const hiData: HiPacketData = {
@@ -461,7 +460,7 @@ export class Tinode {
 
             case PacketTypes.Sub:
                 const subData: SubPacketData = {
-                    topic,
+                    topic: topicName,
                     set: {},
                     get: {},
                 };
@@ -469,14 +468,14 @@ export class Tinode {
 
             case PacketTypes.Leave:
                 const leaveData: LeavePacketData = {
-                    topic,
+                    topic: topicName,
                     unsub: false,
                 };
                 return new Packet(type, leaveData, this.getNextUniqueId());
 
             case PacketTypes.Pub:
                 const pubData: PubPacketData = {
-                    topic,
+                    topic: topicName,
                     noecho: false,
                     head: null,
                     content: {},
@@ -488,7 +487,7 @@ export class Tinode {
 
             case PacketTypes.Get:
                 const getData: GetPacketData = {
-                    topic,
+                    topic: topicName,
                     what: null,
                     desc: {},
                     sub: {},
@@ -498,7 +497,7 @@ export class Tinode {
 
             case PacketTypes.Set:
                 const setData: SetPacketData = {
-                    topic,
+                    topic: topicName,
                     desc: {},
                     sub: {},
                     tags: [],
@@ -507,7 +506,7 @@ export class Tinode {
 
             case PacketTypes.Del:
                 const delData: DelPacketData = {
-                    topic,
+                    topic: topicName,
                     what: null,
                     delseq: null,
                     hard: false,
@@ -518,7 +517,7 @@ export class Tinode {
 
             case PacketTypes.Note:
                 const noteData: NotePacketData = {
-                    topic,
+                    topic: topicName,
                     seq: undefined,
                     what: null,
                 };
@@ -658,27 +657,26 @@ export class Tinode {
 
         if (pkt.ctrl.code === 205 && pkt.ctrl.text === 'evicted') {
             // User evicted from topic.
-            // REVIEW Set Topic type
-            const topic: any = this.cacheGet('topic', pkt.ctrl.topic);
+            const topic: Topic = this.cacheGet('topic', pkt.ctrl.topic);
             if (topic) {
-                topic._resetSub();
+                topic.resetSub();
             }
         }
 
         if (pkt.ctrl.params && pkt.ctrl.params.what === 'data') {
             // All messages received: "params":{"count":11,"what":"data"},
-            const topic = this.cacheGet('topic', pkt.ctrl.topic);
+            const topic: Topic = this.cacheGet('topic', pkt.ctrl.topic);
             if (topic) {
-                topic._allMessagesReceived(pkt.ctrl.params.count);
+                topic.allMessagesReceived(pkt.ctrl.params.count);
             }
         }
 
         if (pkt.ctrl.params && pkt.ctrl.params.what === 'sub') {
             // The topic has no subscriptions.
-            const topic = this.cacheGet('topic', pkt.ctrl.topic);
+            const topic: Topic = this.cacheGet('topic', pkt.ctrl.topic);
             if (topic) {
                 // Trigger topic.onSubsUpdated.
-                topic._processMetaSub([]);
+                topic.processMetaSub([]);
             }
         }
     }
@@ -692,9 +690,9 @@ export class Tinode {
         this.onMetaMessage.next(pkt.meta);
 
         // Preferred API: Route meta to topic, if one is registered
-        const topic = this.cacheGet('topic', pkt.meta.topic);
+        const topic: Topic = this.cacheGet('topic', pkt.meta.topic);
         if (topic) {
-            topic._routeMeta(pkt.meta);
+            topic.routeMeta(pkt.meta);
         }
 
         if (pkt.meta.id) {
@@ -711,9 +709,9 @@ export class Tinode {
         this.onDataMessage.next(pkt.data);
 
         // Preferred API: Route data to topic, if one is registered
-        const topic = this.cacheGet('topic', pkt.data.topic);
+        const topic: Topic = this.cacheGet('topic', pkt.data.topic);
         if (topic) {
-            topic._routeData(pkt.data);
+            topic.routeData(pkt.data);
         }
     }
 
@@ -726,9 +724,9 @@ export class Tinode {
         this.onPresMessage.next(pkt.pres);
 
         // Preferred API: Route presence to topic, if one is registered
-        const topic = this.cacheGet('topic', pkt.pres.topic);
+        const topic: Topic = this.cacheGet('topic', pkt.pres.topic);
         if (topic) {
-            topic._routePres(pkt.pres);
+            topic.routePres(pkt.pres);
         }
     }
 
@@ -741,9 +739,9 @@ export class Tinode {
         this.onInfoMessage.next(pkt.info);
 
         // Preferred API: Route {info}} to topic, if one is registered
-        const topic = this.cacheGet('topic', pkt.info.topic);
+        const topic: Topic = this.cacheGet('topic', pkt.info.topic);
         if (topic) {
-            topic._routeInfo(pkt.info);
+            topic.routeInfo(pkt.info);
         }
     }
 
@@ -757,9 +755,9 @@ export class Tinode {
         this.authenticated = false;
 
         // Mark all topics as unsubscribed
-        this.cacheMap((obj, key) => {
+        this.cacheMap((obj: any, key: string) => {
             if (key.lastIndexOf('topic:', 0) === 0) {
-                obj._resetSub();
+                obj.resetSub();
             }
         });
 
@@ -1098,12 +1096,12 @@ export class Tinode {
 
     /**
      * Publish {data} message to topic
-     * @param topic - Name of the topic to publish to
+     * @param topicName - Name of the topic to publish to
      * @param data - Payload to publish
      * @param noEcho - If true, tell the server not to echo the message to the original session.
      */
-    publish(topic: string, data: any, noEcho: boolean = false): Promise<any> {
-        return this.publishMessage(this.createMessage(topic, data, noEcho));
+    publish(topicName: string, data: any, noEcho: boolean = false): Promise<any> {
+        return this.publishMessage(this.createMessage(topicName, data, noEcho));
     }
 
     /**

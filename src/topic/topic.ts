@@ -24,7 +24,7 @@ export class Topic {
     /**
      * Parent Tinode object
      */
-    private tinode: Tinode;
+    tinode: Tinode;
     /**
      * Locally cached data
      * Subscribed users, for tracking read/recv/msg notifications.
@@ -1059,10 +1059,10 @@ export class Topic {
         this.onMetaDesc.next(this);
     }
 
-    // Called by Tinode when meta.sub is recived or in response to received
+    // Called by Tinode when meta.sub is received or in response to received
     // {ctrl} after setMeta-sub.
     processMetaSub(subs: any) {
-        for (let idx in subs) {
+        for (const idx in subs) {
             if (idx) {
                 const sub = subs[idx];
 
@@ -1106,7 +1106,7 @@ export class Topic {
     }
 
     // Do nothing for topics other than 'me'
-    processMetaCreds(creds: any) { }
+    processMetaCreds(creds: any, b?) { }
 
     // Delete cached messages and update cached transaction IDs
     processDelMessages(clear: any, delseq: any) {
@@ -1277,4 +1277,7 @@ export class Topic {
     cacheGetUser(a): any { }
     subscribe() { }
     cachePutUser(a, b) { }
+    cacheDelUser(a) { }
+    cachePutSelf() { }
+    cacheDelSelf() { }
 }

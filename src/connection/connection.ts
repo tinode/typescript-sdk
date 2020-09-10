@@ -10,9 +10,9 @@ export abstract class Connection {
      * Settings for exponential backoff
      */
     protected backoffSettings: BackoffSettings = {
-        BOFF_BASE: 2000,
-        BOFF_JITTER: 0.3,
-        BOFF_MAX_ITER: 10,
+        backOffBaseDelay: 2000,
+        backOffJitter: 0.3,
+        backOffMaxIteration: 10,
     };
     /**
      * Contains current connection configuration
@@ -72,12 +72,16 @@ export abstract class Connection {
     protected boffReconnect(): void {
         // Clear timer
         clearTimeout(this.boffTimer);
+
         // Calculate when to fire the reconnect attempt
-        const timeout = this.backoffSettings.BOFF_BASE * (Math.pow(2, this.boffIteration) * (1.0 + this.backoffSettings.BOFF_JITTER * Math.random()));
+        const jitterDelay = (1.0 + this.backoffSettings.backOffJitter * Math.random());
+        const timeout = this.backoffSettings.backOffBaseDelay * (Math.pow(2, this.boffIteration) * jitterDelay);
+
         // Update iteration counter for future use
-        if (this.boffIteration < this.backoffSettings.BOFF_MAX_ITER) {
+        if (this.boffIteration < this.backoffSettings.backOffMaxIteration) {
             this.boffIteration = this.boffIteration + 1;
         }
+
         this.onAutoReconnectIteration.next({ timeout });
 
         this.boffTimer = setTimeout(() => {

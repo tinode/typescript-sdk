@@ -11,6 +11,7 @@ import {
     jsonLoggerHelper,
     isNewGroupTopicName,
     initializeNetworkProviders,
+    initPacket,
 } from './utilities';
 import {
     HiPacketData,
@@ -37,6 +38,7 @@ import { OnLoginData } from './models/tinode-events';
 import { AccountParams } from './models/account-params';
 import { AuthenticationScheme } from './models/auth-scheme';
 import { LargeFileHelper } from './large-file-helper';
+import { Message } from './message';
 
 export class Tinode {
     /**
@@ -423,112 +425,6 @@ export class Tinode {
     }
 
     /**
-     * Generator of packets stubs
-     */
-    private initPacket(type: PacketTypes, topicName?: string): Packet<any> {
-        switch (type) {
-            case PacketTypes.Hi:
-                const hiData: HiPacketData = {
-                    ver: AppInfo.VERSION,
-                    ua: this.getUserAgent(),
-                    dev: this.deviceToken,
-                    lang: this.humanLanguage,
-                    platf: this.platform,
-                };
-                return new Packet(type, hiData, this.getNextUniqueId());
-
-            case PacketTypes.Acc:
-                const accData: AccPacketData = {
-                    user: null,
-                    scheme: null,
-                    secret: null,
-                    login: false,
-                    tags: null,
-                    desc: {},
-                    cred: {},
-                    token: null,
-                };
-                return new Packet(type, accData, this.getNextUniqueId());
-
-            case PacketTypes.Login:
-                const loginData: LoginPacketData = {
-                    scheme: null,
-                    secret: null,
-                    cred: null,
-                };
-                return new Packet(type, loginData, this.getNextUniqueId());
-
-            case PacketTypes.Sub:
-                const subData: SubPacketData = {
-                    topic: topicName,
-                    set: {},
-                    get: {},
-                };
-                return new Packet(type, subData, this.getNextUniqueId());
-
-            case PacketTypes.Leave:
-                const leaveData: LeavePacketData = {
-                    topic: topicName,
-                    unsub: false,
-                };
-                return new Packet(type, leaveData, this.getNextUniqueId());
-
-            case PacketTypes.Pub:
-                const pubData: PubPacketData = {
-                    topic: topicName,
-                    noecho: false,
-                    head: null,
-                    content: {},
-                    from: null,
-                    seq: null,
-                    ts: null,
-                };
-                return new Packet(type, pubData, this.getNextUniqueId());
-
-            case PacketTypes.Get:
-                const getData: GetPacketData = {
-                    topic: topicName,
-                    what: null,
-                    desc: {},
-                    sub: {},
-                    data: {},
-                };
-                return new Packet(type, getData, this.getNextUniqueId());
-
-            case PacketTypes.Set:
-                const setData: SetPacketData = {
-                    topic: topicName,
-                    desc: {},
-                    sub: {},
-                    tags: [],
-                };
-                return new Packet(type, setData, this.getNextUniqueId());
-
-            case PacketTypes.Del:
-                const delData: DelPacketData = {
-                    topic: topicName,
-                    what: null,
-                    delseq: null,
-                    hard: false,
-                    user: null,
-                    cred: null,
-                };
-                return new Packet(type, delData, this.getNextUniqueId());
-
-            case PacketTypes.Note:
-                const noteData: NotePacketData = {
-                    topic: topicName,
-                    seq: undefined,
-                    what: null,
-                };
-                return new Packet(type, noteData, null);
-
-            default:
-                throw new Error('Unknown packet type requested: ' + type);
-        }
-    }
-
-    /**
      * Send a packet. If packet id is provided return a promise.
      * @param pkt - Packet
      * @param id - Message ID
@@ -826,7 +722,7 @@ export class Tinode {
      * Send handshake to the server.
      */
     async hello(): Promise<any> {
-        const pkt: Packet<HiPacketData> = this.initPacket(PacketTypes.Hi);
+        const pkt: Packet<HiPacketData> = initPacket(PacketTypes.Hi);
         try {
             const ctrl = await this.send(pkt, pkt.id);
             // Reset backoff counter on successful connection.
@@ -854,7 +750,7 @@ export class Tinode {
      * @param params - User data to pass to the server.
      */
     account(userId: string, scheme: AuthenticationScheme, secret: string, login: boolean, params?: AccountParams): Promise<any> {
-        const pkt: Packet<AccPacketData> = this.initPacket(PacketTypes.Acc);
+        const pkt: Packet<AccPacketData> = initPacket(PacketTypes.Acc);
         pkt.data.user = userId;
         pkt.data.scheme = scheme;
         pkt.data.secret = secret;
@@ -927,7 +823,7 @@ export class Tinode {
      * @returns Promise which will be resolved/rejected when server reply is received
      */
     async login(scheme: AuthenticationScheme, secret: string, cred?: any): Promise<any> {
-        const pkt: Packet<LoginPacketData> = this.initPacket(PacketTypes.Login);
+        const pkt: Packet<LoginPacketData> = initPacket(PacketTypes.Login);
         pkt.data.scheme = scheme;
         pkt.data.secret = secret;
         pkt.data.cred = cred;
@@ -1000,7 +896,7 @@ export class Tinode {
         if (deviceToken && deviceToken !== this.deviceToken) {
             this.deviceToken = deviceToken;
             if (sendToServer && this.isConnected() && this.isAuthenticated()) {
-                const pkt: Packet<HiPacketData> = this.initPacket(PacketTypes.Hi);
+                const pkt: Packet<HiPacketData> = initPacket(PacketTypes.Hi);
                 pkt.data.dev = deviceToken;
                 this.send(pkt, pkt.id);
                 sent = true;
@@ -1016,7 +912,7 @@ export class Tinode {
      * @param setParams - Optional initialization parameters
      */
     subscribe(topicName: string, getParams: GetQuery, setParams: SetParams): Promise<any> {
-        const pkt: Packet<SubPacketData> = this.initPacket(PacketTypes.Sub, topicName);
+        const pkt: Packet<SubPacketData> = initPacket(PacketTypes.Sub, topicName);
         if (!topicName) {
             topicName = TopicNames.TOPIC_NEW;
         }
@@ -1054,44 +950,28 @@ export class Tinode {
      * @param unSubscribe - If true, detach and unsubscribe, otherwise just detach.
      */
     leave(topicName: string, unsubscribe: boolean): Promise<any> {
-        const pkt: Packet<LeavePacketData> = this.initPacket(PacketTypes.Leave, topicName);
+        const pkt: Packet<LeavePacketData> = initPacket(PacketTypes.Leave, topicName);
         pkt.data.unsub = unsubscribe;
         return this.send(pkt, pkt.id);
     }
 
     /**
      * Create message draft without sending it to the server
-     * @param topic - Name of the topic to publish to
+     * @param topicName - Name of the topic to publish to
      * @param data - Payload to publish
      * @param noEcho - If true, tell the server not to echo the message to the original session.
      */
-    createMessage(topic: string, data: any, noEcho: boolean = false): Packet<PubPacketData> {
-        const pkt: Packet<PubPacketData> = this.initPacket(PacketTypes.Pub, topic);
-        const dft = typeof data === 'string' ? Drafty.parse(data) : data;
-
-        if (dft && !Drafty.isPlainText(dft)) {
-            pkt.data.head = {
-                mime: Drafty.getContentType()
-            };
-            data = dft;
-        }
-
-        pkt.data.noecho = noEcho;
-        pkt.data.content = data;
-        return pkt;
+    createMessage(topicName: string, data: any, noEcho: boolean = false): Message {
+        return new Message(topicName, data, !noEcho);
     }
 
     /**
      * Publish message to topic. The message packet should be created by `createMessage`
      * @param pubPkt - Message to publish
      */
-    publishMessage(pubPkt: Packet<PubPacketData>): Promise<any> {
-        // Make a shallow copy. Needed in order to clear locally-assigned temp values;
-        pubPkt = Object.assign({}, pubPkt);
-        pubPkt.data.seq = undefined;
-        pubPkt.data.from = undefined;
-        pubPkt.data.ts = undefined;
-        return this.send(pubPkt, pubPkt.id);
+    publishMessage(message: Message): Promise<any> {
+        message.resetLocalValues();
+        return this.send(message.getPubPacket());
     }
 
     /**
@@ -1110,7 +990,7 @@ export class Tinode {
      * @param params - Parameters of the query. Use {Tinode.MetaGetBuilder} to generate.
      */
     getMeta(topicName: string, params: GetQuery): Promise<any> {
-        const pkt: Packet<GetPacketData> = this.initPacket(PacketTypes.Get, topicName);
+        const pkt: Packet<GetPacketData> = initPacket(PacketTypes.Get, topicName);
         pkt.data = mergeObj(pkt.data, params);
         return this.send(pkt, pkt.id);
     }
@@ -1121,7 +1001,7 @@ export class Tinode {
      * @param params - topic metadata to update
      */
     setMeta(topicName: string, params: SetParams): Promise<any> {
-        const pkt = this.initPacket(PacketTypes.Set, topicName);
+        const pkt = initPacket(PacketTypes.Set, topicName);
         const what = [];
 
         if (params) {
@@ -1145,7 +1025,7 @@ export class Tinode {
      * @param hard - Hard or soft delete
      */
     delMessages(topicName: string, ranges: DelRange[], hard: boolean): Promise<any> {
-        const pkt: Packet<DelPacketData> = this.initPacket(PacketTypes.Del, topicName);
+        const pkt: Packet<DelPacketData> = initPacket(PacketTypes.Del, topicName);
         pkt.data.what = 'msg';
         pkt.data.delseq = ranges;
         pkt.data.hard = hard;
@@ -1158,7 +1038,7 @@ export class Tinode {
      * @param hard - hard-delete topic.
      */
     async delTopic(topicName: string, hard: boolean): Promise<any> {
-        const pkt: Packet<DelPacketData> = this.initPacket(PacketTypes.Del, topicName);
+        const pkt: Packet<DelPacketData> = initPacket(PacketTypes.Del, topicName);
         pkt.data.what = 'topic';
         pkt.data.hard = hard;
 
@@ -1173,7 +1053,7 @@ export class Tinode {
      * @param userId - User ID to remove
      */
     delSubscription(topicName: string, userId: string): Promise<any> {
-        const pkt: Packet<DelPacketData> = this.initPacket(PacketTypes.Del, topicName);
+        const pkt: Packet<DelPacketData> = initPacket(PacketTypes.Del, topicName);
         pkt.data.what = 'sub';
         pkt.data.user = userId;
         return this.send(pkt, pkt.id);
@@ -1185,7 +1065,7 @@ export class Tinode {
      * @param value - validation value, i.e. 'alice@example.com'.
      */
     delCredential(method: string, value: string): Promise<any> {
-        const pkt: Packet<DelPacketData> = this.initPacket(PacketTypes.Del, TopicNames.TOPIC_ME);
+        const pkt: Packet<DelPacketData> = initPacket(PacketTypes.Del, TopicNames.TOPIC_ME);
         pkt.data.what = 'cred';
         pkt.data.cred = {
             meth: method,
@@ -1200,7 +1080,7 @@ export class Tinode {
      * @param hard - hard-delete user.
      */
     async delCurrentUser(hard: boolean): Promise<any> {
-        const pkt: Packet<DelPacketData> = this.initPacket(PacketTypes.Del, null);
+        const pkt: Packet<DelPacketData> = initPacket(PacketTypes.Del, null);
         pkt.data.what = 'user';
         pkt.data.hard = hard;
 
@@ -1220,7 +1100,7 @@ export class Tinode {
             throw new Error('Invalid message id ' + seq);
         }
 
-        const pkt: Packet<NotePacketData> = this.initPacket(PacketTypes.Note, topicName);
+        const pkt: Packet<NotePacketData> = initPacket(PacketTypes.Note, topicName);
         pkt.data.what = what;
         pkt.data.seq = seq;
         this.send(pkt);
@@ -1232,7 +1112,7 @@ export class Tinode {
      * @param topicName - Name of the topic to broadcast to
      */
     noteKeyPress(topicName: string) {
-        const pkt: Packet<NotePacketData> = this.initPacket(PacketTypes.Note, topicName);
+        const pkt: Packet<NotePacketData> = initPacket(PacketTypes.Note, topicName);
         pkt.data.what = 'kp';
         this.send(pkt);
     }

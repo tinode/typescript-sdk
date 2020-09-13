@@ -1,5 +1,7 @@
 import { base64codes, base64abc, DEL_CHAR, AppInfo, TopicTypesObj, TopicNames } from './constants';
 import { AccessMode } from './access-mode';
+import { PacketTypes, Packet } from './models/packet';
+import { HiPacketData, AccPacketData, LoginPacketData, SubPacketData, LeavePacketData, PubPacketData, GetPacketData, SetPacketData, DelPacketData, NotePacketData } from './models/packet-data';
 
 function getBase64Code(charCode: number) {
     if (charCode >= base64codes.length) {
@@ -507,4 +509,110 @@ export function isNewGroupTopicName(name: string) {
  */
 export function isNullValue(str: string) {
     return str === DEL_CHAR;
+}
+
+/**
+ * Generator of packets stubs
+ */
+export function initPacket(type: PacketTypes, topicName?: string): Packet<any> {
+    switch (type) {
+        case PacketTypes.Hi:
+            const hiData: HiPacketData = {
+                ver: AppInfo.VERSION,
+                ua: this.getUserAgent(),
+                dev: this.deviceToken,
+                lang: this.humanLanguage,
+                platf: this.platform,
+            };
+            return new Packet(type, hiData, this.getNextUniqueId());
+
+        case PacketTypes.Acc:
+            const accData: AccPacketData = {
+                user: null,
+                scheme: null,
+                secret: null,
+                login: false,
+                tags: null,
+                desc: {},
+                cred: {},
+                token: null,
+            };
+            return new Packet(type, accData, this.getNextUniqueId());
+
+        case PacketTypes.Login:
+            const loginData: LoginPacketData = {
+                scheme: null,
+                secret: null,
+                cred: null,
+            };
+            return new Packet(type, loginData, this.getNextUniqueId());
+
+        case PacketTypes.Sub:
+            const subData: SubPacketData = {
+                topic: topicName,
+                set: {},
+                get: {},
+            };
+            return new Packet(type, subData, this.getNextUniqueId());
+
+        case PacketTypes.Leave:
+            const leaveData: LeavePacketData = {
+                topic: topicName,
+                unsub: false,
+            };
+            return new Packet(type, leaveData, this.getNextUniqueId());
+
+        case PacketTypes.Pub:
+            const pubData: PubPacketData = {
+                topic: topicName,
+                noecho: false,
+                head: null,
+                content: {},
+                from: null,
+                seq: null,
+                ts: null,
+            };
+            return new Packet(type, pubData, this.getNextUniqueId());
+
+        case PacketTypes.Get:
+            const getData: GetPacketData = {
+                topic: topicName,
+                what: null,
+                desc: {},
+                sub: {},
+                data: {},
+            };
+            return new Packet(type, getData, this.getNextUniqueId());
+
+        case PacketTypes.Set:
+            const setData: SetPacketData = {
+                topic: topicName,
+                desc: {},
+                sub: {},
+                tags: [],
+            };
+            return new Packet(type, setData, this.getNextUniqueId());
+
+        case PacketTypes.Del:
+            const delData: DelPacketData = {
+                topic: topicName,
+                what: null,
+                delseq: null,
+                hard: false,
+                user: null,
+                cred: null,
+            };
+            return new Packet(type, delData, this.getNextUniqueId());
+
+        case PacketTypes.Note:
+            const noteData: NotePacketData = {
+                topic: topicName,
+                seq: undefined,
+                what: null,
+            };
+            return new Packet(type, noteData, null);
+
+        default:
+            throw new Error('Unknown packet type requested: ' + type);
+    }
 }

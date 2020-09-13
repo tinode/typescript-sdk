@@ -1,14 +1,12 @@
 import { AppSettings, DEL_CHAR, MessageStatus, AccessModeFlags, TopicNames } from '../constants';
 import { normalizeArray, mergeObj, stringToDate, mergeToCache } from '../utilities';
-import { PubPacketData } from '../models/packet-data';
 import { MetaGetBuilder } from '../meta-get-builder';
 import { SetParams } from '../models/set-params';
 import { GetQuery } from '../models/get-query';
 import { DelRange } from '../models/del-range';
 import { AccessMode } from '../access-mode';
-import { Packet } from '../models/packet';
 import { CBuffer } from '../cbuffer';
-import { Drafty } from '../drafty';
+import { Message } from '../message';
 import { Tinode } from '../tinode';
 import { Subject } from 'rxjs';
 
@@ -124,6 +122,7 @@ export class Topic {
 
     /**
      * Check if the topic is subscribed.
+     * @returns Subscription status
      */
     isSubscribed(): boolean {
         return this.subscribed;
@@ -134,30 +133,30 @@ export class Topic {
      * @param data - Content to wrap in a draft.
      * @param noEcho - If true server will not echo message back to originating
      */
-    createMessage(data: any, noEcho: boolean): Packet<PubPacketData> {
+    createMessage(data: any, noEcho: boolean): Message {
         return this.tinode.createMessage(this.name, data, noEcho);
     }
 
     /**
      * Update message's seqId.
-     * @param pub - message packet.
-     * @param newSeqId - new seq id for pub.
+     * @param msg - message packet.
+     * @param newSeqId - new seq id for
      */
-    swapMessageId(pub: Packet<PubPacketData>, newSeqId: number) {
+    swapMessageId(msg: Message, newSeqId: number) {
         const idx = this.messages.find({
-            seq: pub.data.seq
+            seq: msg.seq
         }, true);
+
         const numMessages = this.messages.length();
-        pub.data.seq = newSeqId;
+        msg.seq = newSeqId;
         if (0 <= idx && idx < numMessages) {
-            // this.messages are sorted by `seq`.
-            // If changing pub.seq to newSeqId breaks the invariant, fix it.
-            // FIXME: Operator '<=' cannot be applied to types 'boolean' and 'number'.
-            // if ((idx > 0 && this.messages.getAt(idx - 1).seq >= newSeqId) ||
-            //     (idx + 1 < numMessages && newSeqId < this.messages.getAt(idx + 1).seq <= newSeqId)) {
-            //     this.messages.delAt(idx);
-            //     this.messages.put(pub);
-            // }
+            if (
+                (idx > 0 && this.messages.getAt(idx - 1).seq >= newSeqId) ||
+                (idx + 1 < numMessages && this.messages.getAt(idx + 1).seq <= newSeqId)
+            ) {
+                this.messages.delAt(idx);
+                this.messages.put(msg);
+            }
         }
     }
 
@@ -174,34 +173,26 @@ export class Topic {
      * Publish message created by create message
      * @param pub - {data} object to publish. Must be created by createMessage
      */
-    async publishMessage(pub: Packet<PubPacketData>): Promise<any> {
+    async publishMessage(message: Message): Promise<any> {
         if (!this.subscribed) {
             return Promise.reject(new Error('Cannot publish on inactive topic'));
         }
 
-        // Update header with attachment records.
-        if (Drafty.hasAttachments(pub.data.content) && !pub.data.head.attachments) {
-            const attachments = [];
-            Drafty.attachments(pub.data.content, (data: any) => {
-                attachments.push(data.ref);
-            });
-            pub.data.head.attachments = attachments;
-        }
-
-        pub.sending = true;
-        pub.failed = false;
+        message.setStatus(MessageStatus.SENDING);
 
         try {
-            const ctrl = await this.tinode.publishMessage(pub);
-            pub.sending = false;
-            pub.data.ts = ctrl.ts;
-            this.swapMessageId(pub, ctrl.params.seq);
-            this.routeData(pub);
+            const ctrl = await this.tinode.publishMessage(message);
+            const seq = ctrl.params.seq;
+            if (seq) {
+                message.setStatus(MessageStatus.SENT);
+            }
+            message.ts = ctrl.ts;
+            this.swapMessageId(message, seq);
+            this.routeData(message);
             return ctrl;
         } catch (err) {
             this.tinode.logger('WARNING: Message rejected by the server', err);
-            pub.sending = false;
-            pub.failed = true;
+            message.setStatus(MessageStatus.FAILED);
             this.onData.next();
         }
     }
@@ -215,22 +206,22 @@ export class Topic {
      * @param pub - Message to use as a draft.
      * @param prom - Message will be sent when this promise is resolved, discarded if rejected.
      */
-    publishDraft(pub: Packet<PubPacketData>, prom?: Promise<any>): Promise<any> {
+    publishDraft(pub: Message, prom?: Promise<any>): Promise<any> {
         if (!prom && !this.subscribed) {
             return Promise.reject(new Error('Cannot publish on inactive topic'));
         }
 
-        const seq = pub.data.seq || this.getQueuedSeqId();
+        const seq = pub.seq || this.getQueuedSeqId();
         if (!pub.noForwarding) {
             // The 'seq', 'ts', and 'from' are added to mimic {data}. They are removed later
             // before the message is sent.
             pub.noForwarding = true;
-            pub.data.seq = seq;
-            pub.data.ts = new Date();
-            pub.data.from = this.tinode.getCurrentUserID();
+            pub.seq = seq;
+            pub.ts = new Date();
+            pub.from = this.tinode.getCurrentUserID();
 
             // Don't need an echo message because the message is added to local cache right away.
-            pub.data.noecho = true;
+            pub.echo = false;
             // Add to cache.
             this.messages.put(pub);
             this.onData.next(pub);
@@ -251,8 +242,7 @@ export class Topic {
             },
             (err) => {
                 this.tinode.logger('WARNING: Message draft rejected by the server', err);
-                pub.sending = false;
-                pub.failed = true;
+                pub.setStatus(MessageStatus.FAILED);
                 this.messages.delAt(this.messages.find(pub));
                 this.onData.next();
             });
@@ -878,18 +868,18 @@ export class Topic {
      * Process data message
      * @param data data
      */
-    routeData(data: Packet<PubPacketData>) {
-        if (data.data.content) {
-            if (!this.touched || this.touched < data.data.ts) {
-                this.touched = data.data.ts;
+    routeData(data: Message) {
+        if (data.content) {
+            if (!this.touched || this.touched < data.ts) {
+                this.touched = data.ts;
             }
         }
 
-        if (data.data.seq > this.maxSeq) {
-            this.maxSeq = data.data.seq;
+        if (data.seq > this.maxSeq) {
+            this.maxSeq = data.seq;
         }
-        if (data.data.seq < this.minSeq || this.minSeq === 0) {
-            this.minSeq = data.data.seq;
+        if (data.seq < this.minSeq || this.minSeq === 0) {
+            this.minSeq = data.seq;
         }
 
         if (!data.noForwarding) {
@@ -903,8 +893,11 @@ export class Topic {
         const me = this.tinode.getMeTopic();
         if (me) {
             // Messages from the current user are considered to be read already.
-            me.setMsgReadRecv(this.name,
-                (!data.data.from || this.tinode.isMe(data.data.from)) ? 'read' : 'msg', data.data.seq, data.data.ts);
+            me.setMsgReadRecv(
+                this.name,
+                (!data.from || this.tinode.isMe(data.from)) ? 'read' : 'msg',
+                data.seq, data.ts
+            );
         }
     }
 

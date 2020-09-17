@@ -63,9 +63,7 @@ export class Topic {
     /**
      * Message cache, sorted by message seq values, from old to new.
      */
-    private messages = new CBuffer((a, b) => {
-        return a.seq - b.seq;
-    }, true);
+    private messages = new CBuffer((a, b) => a.seq - b.seq, true);
     /**
      * The maximum known {data.seq} value.
      */
@@ -203,47 +201,47 @@ export class Topic {
      * The message is sent when the
      * The message should be created by createMessage.
      * This is probably not the final API.
-     * @param pub - Message to use as a draft.
+     * @param msg - Message to use as a draft.
      * @param prom - Message will be sent when this promise is resolved, discarded if rejected.
      */
-    publishDraft(pub: Message, prom?: Promise<any>): Promise<any> {
-        if (!prom && !this.subscribed) {
+    publishDraft(msg: Message, prom?: Promise<any>): Promise<any> {
+        if (!this.subscribed) {
             return Promise.reject(new Error('Cannot publish on inactive topic'));
         }
 
-        const seq = pub.seq || this.getQueuedSeqId();
-        if (!pub.noForwarding) {
+        const seq = msg.seq || this.getQueuedSeqId();
+        if (!msg.noForwarding) {
             // The 'seq', 'ts', and 'from' are added to mimic {data}. They are removed later
             // before the message is sent.
-            pub.noForwarding = true;
-            pub.seq = seq;
-            pub.ts = new Date();
-            pub.from = this.tinode.getCurrentUserID();
+            msg.noForwarding = true;
+            msg.seq = seq;
+            msg.ts = new Date();
+            msg.from = this.tinode.getCurrentUserID();
 
             // Don't need an echo message because the message is added to local cache right away.
-            pub.echo = false;
+            msg.echo = false;
             // Add to cache.
-            this.messages.put(pub);
-            this.onData.next(pub);
+            this.messages.put(msg);
+            this.onData.next(msg);
         }
 
         // If promise is provided, send the queued message when it's resolved.
         // If no promise is provided, create a resolved one and send immediately.
         prom = (prom || Promise.resolve()).then(
             () => {
-                if (pub.cancelled) {
+                if (msg.cancelled) {
                     return {
                         code: 300,
                         text: 'cancelled'
                     };
                 }
 
-                return this.publishMessage(pub);
+                return this.publishMessage(msg);
             },
             (err) => {
                 this.tinode.logger('WARNING: Message draft rejected by the server', err);
-                pub.setStatus(MessageStatus.FAILED);
-                this.messages.delAt(this.messages.find(pub));
+                msg.setStatus(MessageStatus.FAILED);
+                this.messages.delAt(this.messages.find(msg));
                 this.onData.next();
             });
         return prom;
@@ -253,18 +251,18 @@ export class Topic {
      * Leave the topic, optionally unsubscribe. Leaving the topic means the topic will stop
      * receiving updates from the server. Unsubscribing will terminate user's relationship with the topic.
      * Wrapper for Tinode.leave
-     * @param unsub - If true, unsubscribe, otherwise just leave.
+     * @param unsubscribe - If true, unsubscribe, otherwise just leave.
      */
-    async leave(unsub: boolean) {
-        // It's possible to unsubscribe (unsub==true) from inactive topic.
-        if (!this.subscribed && !unsub) {
+    async leave(unsubscribe: boolean) {
+        // It's possible to unsubscribe from inactive topic.
+        if (!this.subscribed && !unsubscribe) {
             return Promise.reject(new Error('Cannot leave inactive topic'));
         }
 
         // Send a 'leave' message, handle async response
-        const ctrl = await this.tinode.leave(this.name, unsub);
+        const ctrl = await this.tinode.leave(this.name, unsubscribe);
         this.resetSub();
-        if (unsub) {
+        if (unsubscribe) {
             this.gone();
         }
         return ctrl;
@@ -286,19 +284,19 @@ export class Topic {
      */
     getMessagesPage(limit: number, forward: boolean) {
         const query = this.startMetaQuery();
+        let promise = this.getMeta(query.build());
+
         if (forward) {
             query.withLaterData(limit);
         } else {
             query.withEarlierData(limit);
-        }
-        let promise = this.getMeta(query.build());
-        if (!forward) {
             promise = promise.then((ctrl) => {
                 if (ctrl && ctrl.params && !ctrl.params.count) {
                     this.noEarlierMsgs = true;
                 }
             });
         }
+
         return promise;
     }
 

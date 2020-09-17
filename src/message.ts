@@ -34,6 +34,9 @@ export class Message {
      * Current message status
      */
     status: MessageStatus;
+    /**
+     * Used to avoid message duplication when retrying failed publish
+     */
     noForwarding: boolean;
     cancelled: boolean;
 

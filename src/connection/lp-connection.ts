@@ -53,7 +53,7 @@ export class LPConnection extends Connection {
         let poller: XMLHttpRequest = new NetworkProviders.XMLHTTPRequest();
         let promiseCompleted = false;
 
-        poller.onreadystatechange = ((evt: any) => {
+        poller.onreadystatechange = (evt: any) => {
             if (poller.readyState === XDRStatus.DONE) {
                 if (poller.status === 201) { // 201 == HTTP.Created, get SID
                     const pkt = JSON.parse(poller.responseText, jsonParseHelper);
@@ -96,8 +96,9 @@ export class LPConnection extends Connection {
                     this.boffReconnect();
                 }
             }
-        }).bind(this);
+        };
 
+        console.log('url: ', url);
         poller.open('GET', url, true);
         return poller;
     }

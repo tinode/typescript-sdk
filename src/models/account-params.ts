@@ -1,4 +1,4 @@
-import { DefAcs } from "./defacs";
+import { DefAcs } from './defacs';
 
 export interface AccountParams {
     /**

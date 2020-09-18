@@ -1,7 +1,7 @@
 import { makeBaseUrl, NetworkProviders, log } from '../utilities';
-import { ConnectionOptions } from './connection-options';
+import { ConnectionOptions } from './models/connection-options';
 import { AppSettings } from '../constants';
-import { Connection } from './connection';
+import { Connection } from './models';
 
 export class WSConnection extends Connection {
     socket: WebSocket;

@@ -1,12 +1,12 @@
 import { makeBaseUrl, log, NetworkProviders, jsonParseHelper } from '../utilities';
-import { ConnectionOptions } from './connection-options';
+import { ConnectionOptions } from './models/connection-options';
 import { XDRStatus, AppSettings } from '../constants';
-import { Connection } from './connection';
+import { Connection } from './models';
 
 export class LPConnection extends Connection {
     private poller: XMLHttpRequest = null;
     private sender: XMLHttpRequest = null;
-    private LP_URL = null;
+    private LP_URL: string = null;
 
     constructor(options: ConnectionOptions) {
         super(options);
@@ -106,8 +106,8 @@ export class LPConnection extends Connection {
      * Returns a http request to send data
      * @param url - Target URL
      */
-    private LPSender(url: string) {
-        const sender = NetworkProviders.XMLHTTPRequest();
+    private LPSender(url: string): XMLHttpRequest {
+        const sender: XMLHttpRequest = NetworkProviders.XMLHTTPRequest();
         sender.onreadystatechange = (evt) => {
             if (sender.readyState === XDRStatus.DONE && sender.status >= 400) {
                 // Some sort of error response
@@ -122,7 +122,7 @@ export class LPConnection extends Connection {
     /**
      * Disconnect this connection
      */
-    disconnect() {
+    disconnect(): void {
         this.boffClosed = true;
         this.backoffStop();
 
@@ -147,7 +147,7 @@ export class LPConnection extends Connection {
      * Send a string to the server.
      * @param msg - String to send.
      */
-    sendText(msg: string) {
+    sendText(msg: string): void {
         this.sender = this.LPSender(this.LP_URL);
         if (this.sender && (this.sender.readyState === this.sender.OPENED)) {
             this.sender.send(msg);

@@ -63,7 +63,7 @@ export class Topic {
     /**
      * Message cache, sorted by message seq values, from old to new.
      */
-    private messages = new CBuffer((a, b) => a.seq - b.seq, true);
+    private messages = new CBuffer((a: Message, b: Message) => a.seq - b.seq, true);
     /**
      * The maximum known {data.seq} value.
      */
@@ -527,7 +527,7 @@ export class Topic {
      *  Delete topic. Requires Owner permission. Wrapper for delTopic
      * @param hard - had-delete topic.
      */
-    async delTopic(hard?: boolean): Promise<any> {
+    async delTopic(hard: boolean = false): Promise<any> {
         const ctrl = await this.tinode.delTopic(this.name, hard);
         this.resetSub();
         this.gone();
@@ -1012,7 +1012,7 @@ export class Topic {
     }
 
     // Called by Tinode when meta.desc packet is received.
-    // Called by 'me' topic on contact update (desc._noForwarding is true).
+    // Called by 'me' topic on contact update (desc.noForwarding is true).
     processMetaDesc(desc: any) {
         // Synthetic desc may include defacs for p2p topics which is useless.
         // Remove it.
@@ -1026,12 +1026,12 @@ export class Topic {
         stringToDate(this);
 
         // Update relevant contact in the me topic, if available:
-        if (this.name !== TopicNames.TOPIC_ME && !desc._noForwarding) {
+        if (this.name !== TopicNames.TOPIC_ME && !desc.noForwarding) {
             const me = this.tinode.getMeTopic();
             if (me) {
                 // Must use original 'desc' instead of 'this' so not to lose DEL_CHAR.
                 me.processMetaSub([{
-                    _noForwarding: true,
+                    noForwarding: true,
                     topic: this.name,
                     updated: this.updated,
                     touched: this.touched,
@@ -1157,26 +1157,32 @@ export class Topic {
         this.onDeleteTopic.next();
     }
 
-    // Update global user cache and local subscribers cache.
-    // Don't call this method for non-subscribers.
-    updateCachedUser(uid: any, obj: any) {
+    /**
+     * Update global user cache and local subscribers cache.
+     * Don't call this method for non-subscribers.
+     * @param userId - user id
+     * @param obj - user object
+     */
+    updateCachedUser(userId: string, obj: any) {
         // Fetch user object from the global cache.
         // This is a clone of the stored object
-        let cached = this.cacheGetUser(uid);
+        let cached = this.cacheGetUser(userId);
         cached = mergeObj(cached || {}, obj);
         // Save to global cache
-        this.cachePutUser(uid, cached);
+        this.cachePutUser(userId, cached);
         // Save to the list of topic subscribers.
-        return mergeToCache(this.users, uid, cached);
+        return mergeToCache(this.users, userId, cached);
     }
 
     // Get local seqId for a queued message.
-    getQueuedSeqId() {
+    getQueuedSeqId(): number {
         return this.queuedSeqId++;
     }
 
-    // Calculate ranges of missing messages.
-    updateDeletedRanges() {
+    /**
+     * Calculate ranges of missing messages.
+     */
+    private updateDeletedRanges(): void {
         const ranges = [];
 
         let prev = null;
@@ -1263,7 +1269,7 @@ export class Topic {
         });
     }
 
-    cacheGetUser(a): any { }
+    cacheGetUser(userId: string): any { }
     subscribe() { }
     cachePutUser(a, b) { }
     cacheDelUser(a) { }

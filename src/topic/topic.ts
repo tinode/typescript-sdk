@@ -308,6 +308,7 @@ export class Topic {
         if (params.tags) {
             params.tags = normalizeArray(params.tags);
         }
+
         // Send Set message, handle async response.
         const ctrl = await this.tinode.setMeta(this.name, params);
         if (ctrl && ctrl.code >= 300) {
@@ -353,7 +354,7 @@ export class Topic {
     }
 
     /**
-     * Update access mode of the current user or of another topic subsriber.
+     * Update access mode of the current user or of another topic subscriber.
      * @param uid - UID of the user to update or null to update current user.
      * @param update - the update value, full or delta.
      */
@@ -389,7 +390,7 @@ export class Topic {
      * Archive or un-archive the topic. Wrapper for Tinode.setMeta.
      * @param arch - true to archive the topic, false otherwise
      */
-    archive(arch: boolean) {
+    archive(arch: boolean): Promise<any> {
         if (this.private && this.private.arch === arch) {
             return Promise.resolve(arch);
         }
@@ -492,11 +493,9 @@ export class Topic {
      * @param list - list of seq IDs to delete
      * @param hard - true if messages should be hard-deleted.
      */
-    delMessagesList(list: DelRange[], hard?: boolean) {
+    delMessagesList(list: number[], hard?: boolean) {
         // Sort the list in ascending order
-        // FIXME: Can not sort this array like this
-        // list.sort((a, b) => a - b);
-
+        list.sort((a, b) => a - b);
 
         // Convert the array of IDs to ranges.
         const ranges = list.reduce((out, id) => {
@@ -514,8 +513,7 @@ export class Topic {
                     });
                 } else {
                     // Expand existing range.
-                    // FIXME: Operator '+' cannot be applied to types 'DelRange' and 'number'.
-                    // prev.hi = prev.hi ? Math.max(prev.hi, id + 1) : id + 1;
+                    prev.hi = prev.hi ? Math.max(prev.hi, id + 1) : id + 1;
                 }
             }
             return out;

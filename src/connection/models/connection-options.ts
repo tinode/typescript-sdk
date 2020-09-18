@@ -1,3 +1,5 @@
+import { Transport } from './transport';
+
 /**
  * Information needed to create an instance of connection
  */

@@ -25,7 +25,6 @@ import {
     LeavePacketData,
     LoginPacketData,
 } from './models/packet-data';
-import { Drafty } from './drafty';
 import { Topic } from './topic/topic';
 import { TopicMe } from './topic/topic-me';
 import { TopicFnd } from './topic/topic-fnd';

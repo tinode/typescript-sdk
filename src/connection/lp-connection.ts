@@ -98,7 +98,7 @@ export class LPConnection extends Connection {
             }
         }).bind(this);
 
-        poller.open('GET', this.LP_URL, true);
+        poller.open('GET', url, true);
         return poller;
     }
 

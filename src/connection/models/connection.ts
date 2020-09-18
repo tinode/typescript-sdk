@@ -1,5 +1,8 @@
-import { ConnectionOptions, BackoffSettings, AutoReconnectData, OnDisconnetData, Transport } from './connection-options';
-import { log, NetworkProviders } from '../utilities';
+import { AutoReconnectData, OnDisconnetData } from './event-types';
+import { ConnectionOptions } from './connection-options';
+import { log, NetworkProviders } from '../../utilities';
+import { BackoffSettings } from './backoff-settings';
+import { Transport } from './transport';
 import { Subject } from 'rxjs';
 
 /**

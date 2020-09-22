@@ -1011,8 +1011,11 @@ export class Topic {
         this.onInfo.next(info);
     }
 
-    // Called by Tinode when meta.desc packet is received.
-    // Called by 'me' topic on contact update (desc.noForwarding is true).
+    /**
+     * Called by Tinode when meta.desc packet is received.
+     * Called by 'me' topic on contact update (desc.noForwarding is true).
+     * @param desc - Desc packet
+     */
     processMetaDesc(desc: any) {
         // Synthetic desc may include defacs for p2p topics which is useless.
         // Remove it.
@@ -1048,8 +1051,11 @@ export class Topic {
         this.onMetaDesc.next(this);
     }
 
-    // Called by Tinode when meta.sub is received or in response to received
-    // {ctrl} after setMeta-sub.
+    /**
+     * Called by Tinode when meta.sub is received or in response to received
+     * {ctrl} after setMeta-sub.
+     * @param subs Subscriptions
+     */
     processMetaSub(subs: any) {
         for (const idx in subs) {
             if (idx) {
@@ -1094,10 +1100,9 @@ export class Topic {
         this.onTagsUpdated.next(tags);
     }
 
-    // Do nothing for topics other than 'me'
-    processMetaCreds(creds: any, b?) { }
-
-    // Delete cached messages and update cached transaction IDs
+    /**
+     * Delete cached messages and update cached transaction IDs
+     */
     processDelMessages(clear: any, delseq: any) {
         this.maxDel = Math.max(clear, this.maxDel);
         this.clear = Math.max(clear, this.clear);
@@ -1123,18 +1128,25 @@ export class Topic {
         }
     }
 
-    // Topic is informed that the entire response to {get what=data} has been received.
+    /**
+     * Topic is informed that the entire response to {get what=data} has been received.
+     * @param count - Messages count
+     */
     allMessagesReceived(count: any) {
         this.updateDeletedRanges();
         this.onAllMessagesReceived.next(count);
     }
 
-    // Reset subscribed state
+    /**
+     * Reset subscribed state
+     */
     resetSub() {
         this.subscribed = false;
     }
 
-    // This topic is either deleted or unsubscribed from.
+    /**
+     * This topic is either deleted or unsubscribed from.
+     */
     gone() {
         this.messages.reset();
         this.users = {};
@@ -1174,7 +1186,9 @@ export class Topic {
         return mergeToCache(this.users, userId, cached);
     }
 
-    // Get local seqId for a queued message.
+    /**
+     * Get local seqId for a queued message.
+     */
     getQueuedSeqId(): number {
         return this.queuedSeqId++;
     }
@@ -1215,9 +1229,10 @@ export class Topic {
             };
         }
 
-        // Find gaps in the list of received messages. The list contains messages-proper as well
-        // as placeholders for deleted ranges.
-        // The messages are iterated by seq ID in ascending order.
+        /**
+         * Find gaps in the list of received messages. The list contains messages-proper as well  as placeholders
+         * for deleted ranges. The messages are iterated by seq ID in ascending order.
+         */
         this.messages.forEach((data) => {
             // Do not create a gap between the last sent message and the first unsent.
             if (data.seq >= AppSettings.LOCAL_SEQ_ID) {
@@ -1269,6 +1284,9 @@ export class Topic {
         });
     }
 
+
+    // Do nothing for topics other than 'me'
+    processMetaCreds(creds: any, b?) { }
     cacheGetUser(userId: string): any { }
     subscribe() { }
     cachePutUser(a, b) { }

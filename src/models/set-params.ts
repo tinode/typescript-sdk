@@ -6,6 +6,7 @@ export interface SetDesc {
     private?: any;
     acs?: any;
     updated?: any;
+    noForwarding?: boolean;
 }
 
 export interface SetSub {

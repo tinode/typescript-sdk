@@ -17,14 +17,13 @@ import {
     HiPacketData,
     AccPacketData,
     SubPacketData,
-    PubPacketData,
     GetPacketData,
-    SetPacketData,
     DelPacketData,
     NotePacketData,
     LeavePacketData,
     LoginPacketData,
 } from './models/packet-data';
+import { Message } from './message';
 import { Topic } from './topic/topic';
 import { TopicMe } from './topic/topic-me';
 import { TopicFnd } from './topic/topic-fnd';
@@ -34,10 +33,9 @@ import { DelRange } from './models/del-range';
 import { SetParams } from './models/set-params';
 import { AuthToken } from './models/auth-token';
 import { OnLoginData } from './models/tinode-events';
+import { LargeFileHelper } from './large-file-helper';
 import { AccountParams } from './models/account-params';
 import { AuthenticationScheme } from './models/auth-scheme';
-import { LargeFileHelper } from './large-file-helper';
-import { Message } from './message';
 
 export class Tinode {
     /**
@@ -190,7 +188,7 @@ export class Tinode {
     /**
      * To use Tinode in a non browser context, supply WebSocket and XMLHttpRequest providers.
      */
-    static setNetworkProviders(ws: any, xmlhttprequest: any) {
+    static setNetworkProviders(ws: any, xmlhttprequest: any): void {
         initializeNetworkProviders(ws, xmlhttprequest);
     }
 
@@ -208,7 +206,6 @@ export class Tinode {
         if (typeof navigator !== 'undefined') {
             this.browser = getBrowserInfo(navigator.userAgent, navigator.product);
             this.hardwareOS = navigator.platform;
-            // This is the default language. It could be changed by client.
             this.humanLanguage = navigator.language || 'en-US';
         }
 
@@ -267,7 +264,7 @@ export class Tinode {
      * @param str - String to log
      * @param args - arguments
      */
-    logger(str: string, ...args: any[]) {
+    logger(str: string, ...args: any[]): void {
         if (this.loggingEnabled) {
             const d = new Date();
             const dateString = ('0' + d.getUTCHours()).slice(-2) + ':' +
@@ -285,7 +282,7 @@ export class Tinode {
      * @param name - cache name
      * @param obj - cache object
      */
-    private cachePut(type: string, name: string, obj: any) {
+    private cachePut(type: string, name: string, obj: any): void {
         this.cache[type + ':' + name] = obj;
     }
 
@@ -294,7 +291,7 @@ export class Tinode {
      * @param type - cache type
      * @param name - cache name
      */
-    private cacheGet(type: string, name: string) {
+    private cacheGet(type: string, name: string): any {
         return this.cache[type + ':' + name];
     }
 
@@ -303,7 +300,7 @@ export class Tinode {
      * @param type - cache type
      * @param name - cache name
      */
-    private cacheDel(type: string, name: string) {
+    private cacheDel(type: string, name: string): void {
         delete this.cache[type + ':' + name];
     }
 
@@ -313,7 +310,7 @@ export class Tinode {
      * @param func - function to call for each item
      * @param context - function context
      */
-    private cacheMap(func: any, context?: any) {
+    private cacheMap(func: any, context?: any): void {
         for (const idx in this.cache) {
             if (func(this.cache[idx], idx, context)) {
                 break;
@@ -326,7 +323,7 @@ export class Tinode {
      * Caching user.public only. Everything else is per-topic.
      * @param topic - Topic to attach cache
      */
-    private attachCacheToTopic(topic: Topic) {
+    private attachCacheToTopic(topic: Topic): void {
         topic.tinode = this;
 
         topic.cacheGetUser = (uid) => {
@@ -357,7 +354,7 @@ export class Tinode {
      * Resolve or reject a pending promise.
      * Unresolved promises are stored in _pendingPromises.
      */
-    private execPromise(id: string, code: number, onOK: any, errorText: string) {
+    private execPromise(id: string, code: number, onOK: any, errorText: string): void {
         const callbacks = this.pendingPromises[id];
         if (callbacks) {
             delete this.pendingPromises[id];
@@ -457,7 +454,7 @@ export class Tinode {
      * On successful login save server-provided data.
      * @param ctrl - Server response
      */
-    private loginSuccessful(ctrl: any) {
+    private loginSuccessful(ctrl: any): void {
         if (!ctrl.params || !ctrl.params.user) {
             return;
         }
@@ -482,7 +479,7 @@ export class Tinode {
      * The main message dispatcher.
      * @param data - Server message data
      */
-    private onConnectionMessage(data: string) {
+    private onConnectionMessage(data: string): void {
         // Skip empty response. This happens when LP times out.
         if (!data) {
             return;
@@ -542,7 +539,7 @@ export class Tinode {
      * Handle ctrl type messages
      * @param pkt - Server message data
      */
-    private handleCtrlMessage(pkt: any) {
+    private handleCtrlMessage(pkt: any): void {
         this.onCtrlMessage.next(pkt.ctrl);
 
         // Resolve or reject a pending promise, if any

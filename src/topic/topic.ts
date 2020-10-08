@@ -105,9 +105,9 @@ export class Topic {
     onMeta = new Subject<any>();
     onPres = new Subject<any>();
     onInfo = new Subject<any>();
-    onMetaSub = new Subject<any>(); // A single subscription record;
-    onMetaDesc = new Subject<any>(); // A single desc update;
-    onSubsUpdated = new Subject<any>(); // All subscription records received;
+    onMetaSub = new Subject<any>();
+    onMetaDesc = new Subject<any>();
+    onSubsUpdated = new Subject<any>();
     onTagsUpdated = new Subject<any>();
     onCredsUpdated = new Subject<any>();
     onDeleteTopic = new Subject<any>();
@@ -124,6 +124,62 @@ export class Topic {
      */
     isSubscribed(): boolean {
         return this.subscribed;
+    }
+
+    /**
+     * Request topic to subscribe
+     * @param getParams - get query parameters.
+     * @param setParams - set parameters.
+     */
+    async subscribe(getParams: GetQuery, setParams: SetParams): Promise<any> {
+        // If the topic is already subscribed, return resolved promise
+        if (this.isSubscribed()) {
+            return Promise.resolve(this);
+        }
+
+        // Send subscribe message, handle async response.
+        // If topic name is explicitly provided, use it. If no name, then it's a new group topic, use "new".
+        const ctrl = await this.tinode.subscribe(this.name || TopicNames.TOPIC_NEW, getParams, setParams);
+
+        if (ctrl.code >= 300) {
+            // Do nothing ff the topic is already subscribed to.
+            return ctrl;
+        }
+
+        this.subscribed = true;
+        this.acs = (ctrl.params && ctrl.params.acs) ? ctrl.params.acs : this.acs;
+
+        // Set topic name for new topics and add it to cache.
+        if (this.new) {
+            this.new = false;
+
+            // Name may change new123456 -> grpAbCdEf
+            this.name = ctrl.topic;
+            this.created = ctrl.ts;
+            this.updated = ctrl.ts;
+            // Don't assign touched, otherwise topic will be put on top of the list on subscribe.
+            this.cachePutSelf();
+
+            if (this.name !== TopicNames.TOPIC_ME && this.name !== TopicNames.TOPIC_FND) {
+                // Add the new topic to the list of contacts maintained by the 'me' topic.
+                const me = this.tinode.getMeTopic();
+                if (me) {
+                    me.processMetaSub([{
+                        noForwarding: true,
+                        topic: this.name,
+                        created: ctrl.ts,
+                        updated: ctrl.ts,
+                        acs: this.acs
+                    }]);
+                }
+            }
+
+            if (setParams && setParams.desc) {
+                setParams.desc.noForwarding = true;
+                this.processMetaDesc(setParams.desc);
+            }
+        }
+        return ctrl;
     }
 
     /**
@@ -1288,7 +1344,6 @@ export class Topic {
     // Do nothing for topics other than 'me'
     processMetaCreds(creds: any, b?) { }
     cacheGetUser(userId: string): any { }
-    subscribe() { }
     cachePutUser(a, b) { }
     cacheDelUser(a) { }
     cachePutSelf() { }

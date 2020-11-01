@@ -1,7 +1,7 @@
 import { AppSettings, DEL_CHAR, MessageStatus, AccessModeFlags, TopicNames } from '../constants';
 import { normalizeArray, mergeObj, stringToDate, mergeToCache } from '../utilities';
 import { MetaGetBuilder } from '../meta-get-builder';
-import { SetParams } from '../models/set-params';
+import { SetDesc, SetParams, SetSub } from '../models/set-params';
 import { GetQuery } from '../models/get-query';
 import { DelRange } from '../models/del-range';
 import { AccessMode } from '../access-mode';
@@ -113,6 +113,11 @@ export class Topic {
     onDeleteTopic = new Subject<any>();
     onAllMessagesReceived = new Subject<any>();
 
+    // Cache related callbacks will be set by tinode class
+    cachePutSelf: () => void = () => { };
+    // Do nothing for topics other than 'me'
+    processMetaCreds: (creds: any[], update?: boolean) => void = (creds, update) => { };
+
     constructor(name: string, tinode: Tinode) {
         this.name = name;
         this.tinode = tinode;
@@ -127,7 +132,7 @@ export class Topic {
     }
 
     /**
-     * Request topic to subscribe
+     * Request this topic to subscribe
      * @param getParams - get query parameters.
      * @param setParams - set parameters.
      */
@@ -142,7 +147,7 @@ export class Topic {
         const ctrl = await this.tinode.subscribe(this.name || TopicNames.TOPIC_NEW, getParams, setParams);
 
         if (ctrl.code >= 300) {
-            // Do nothing ff the topic is already subscribed to.
+            // Do nothing if the topic is already subscribed to.
             return ctrl;
         }
 
@@ -189,29 +194,6 @@ export class Topic {
      */
     createMessage(data: any, noEcho: boolean): Message {
         return this.tinode.createMessage(this.name, data, noEcho);
-    }
-
-    /**
-     * Update message's seqId.
-     * @param msg - message packet.
-     * @param newSeqId - new seq id for
-     */
-    swapMessageId(msg: Message, newSeqId: number) {
-        const idx = this.messages.find({
-            seq: msg.seq
-        }, true);
-
-        const numMessages = this.messages.length();
-        msg.seq = newSeqId;
-        if (0 <= idx && idx < numMessages) {
-            if (
-                (idx > 0 && this.messages.getAt(idx - 1).seq >= newSeqId) ||
-                (idx + 1 < numMessages && this.messages.getAt(idx + 1).seq <= newSeqId)
-            ) {
-                this.messages.delAt(idx);
-                this.messages.put(msg);
-            }
-        }
     }
 
     /**
@@ -319,6 +301,7 @@ export class Topic {
         const ctrl = await this.tinode.leave(this.name, unsubscribe);
         this.resetSub();
         if (unsubscribe) {
+            this.tinode.cacheDel('topic', this.name);
             this.gone();
         }
         return ctrl;
@@ -328,7 +311,7 @@ export class Topic {
      * Request topic metadata from the server.
      * @param params - parameters
      */
-    getMeta(params: GetQuery) {
+    getMeta(params: GetQuery): Promise<any> {
         // Send {get} message, return promise.
         return this.tinode.getMeta(this.name, params);
     }
@@ -338,7 +321,7 @@ export class Topic {
      * @param limit - number of messages to get.
      * @param forward - if true, request newer messages.
      */
-    getMessagesPage(limit: number, forward: boolean) {
+    getMessagesPage(limit: number, forward: boolean): Promise<any> {
         const query = this.startMetaQuery();
         let promise = this.getMeta(query.build());
 
@@ -384,7 +367,7 @@ export class Topic {
                 params.sub.user = this.tinode.getCurrentUserID();
                 if (!params.desc) {
                     // Force update to topic's asc.
-                    params.desc = {} as any;
+                    params.desc = {};
                 }
             }
             params.sub.noForwarding = true;
@@ -402,6 +385,7 @@ export class Topic {
         if (params.tags) {
             this.processMetaTags(params.tags);
         }
+
         if (params.cred) {
             this.processMetaCreds([params.cred], true);
         }
@@ -464,7 +448,7 @@ export class Topic {
      * @param ranges - Ranges of message IDs to delete.
      * @param hard - Hard or soft delete
      */
-    delMessages(ranges: DelRange[], hard?: boolean) {
+    async delMessages(ranges: DelRange[], hard?: boolean): Promise<any> {
         if (!this.subscribed) {
             return Promise.reject(new Error('Cannot delete messages in inactive topic'));
         }
@@ -481,7 +465,7 @@ export class Topic {
         });
 
         // Remove pending messages from ranges possibly clipping some ranges.
-        const tosend = ranges.reduce((out, r) => {
+        const toSend = ranges.reduce((out, r) => {
             if (r.low < AppSettings.LOCAL_SEQ_ID) {
                 if (!r.hi || r.hi < AppSettings.LOCAL_SEQ_ID) {
                     out.push(r);
@@ -497,9 +481,9 @@ export class Topic {
         }, []);
 
         // Send {del} message, return promise
-        let result;
-        if (tosend.length > 0) {
-            result = this.tinode.delMessages(this.name, tosend, hard);
+        let result: Promise<any>;
+        if (toSend.length > 0) {
+            result = this.tinode.delMessages(this.name, toSend, hard);
         } else {
             result = Promise.resolve({
                 params: {
@@ -508,24 +492,24 @@ export class Topic {
             });
         }
 
-        return result.then((ctrl) => {
-            if (ctrl.params.del > this.maxDel) {
-                this.maxDel = ctrl.params.del;
+        const ctrl = await result;
+
+        if (ctrl.params.del > this.maxDel) {
+            this.maxDel = ctrl.params.del;
+        }
+
+        ranges.forEach((r) => {
+            if (r.hi) {
+                this.flushMessageRange(r.low, r.hi);
+            } else {
+                this.flushMessage(r.low);
             }
-
-            ranges.forEach((r) => {
-                if (r.hi) {
-                    this.flushMessageRange(r.low, r.hi);
-                } else {
-                    this.flushMessage(r.low);
-                }
-            });
-
-            this.updateDeletedRanges();
-            // Calling with no parameters to indicate the messages were deleted.
-            this.onData.next();
-            return ctrl;
         });
+
+        this.updateDeletedRanges();
+        // Calling with no parameters to indicate the messages were deleted.
+        this.onData.next();
+        return ctrl;
     }
 
     /**
@@ -614,23 +598,29 @@ export class Topic {
      * @param seq - ID or the message read or received.
      */
     note(what: string, seq: number) {
-        const user = this.users[this.tinode.getCurrentUserID()];
-        if (user) {
-            if (!user[what] || user[what] < seq) {
-                if (this.subscribed) {
-                    this.tinode.note(this.name, what, seq);
-                } else {
-                    this.tinode.logger('INFO: Not sending {note} on inactive topic');
-                }
-
-                user[what] = seq;
-            }
-        } else {
-            this.tinode.logger('ERROR: note(): user not found ' + this.tinode.getCurrentUserID());
+        if (!this.subscribed) {
+            // Cannot sending {note} on an inactive topic".
+            return;
         }
 
-        // Update locally cached contact with the new count
         const me = this.tinode.getMeTopic();
+        const user = this.users[this.tinode.getCurrentUserID()];
+
+        let update = false;
+        if (user) {
+            if (!user[what] || user[what] < seq) {
+                user[what] = seq;
+                update = true;
+            }
+        } else if (me) {
+            // Subscriber not found, such as in case of no S permission.
+            update = me.getMsgReadRecv(this.name, what) < seq;
+        }
+
+        if (update) {
+            this.tinode.note(this.name, what, seq);
+        }
+
         if (me) {
             me.setMsgReadRecv(this.name, what, seq);
         }
@@ -672,7 +662,7 @@ export class Topic {
      * @param uid - ID of the user to fetch.
      */
     userDesc(uid: string) {
-        // TODO(gene): handle asynchronous requests
+        // TODO: (gene) handle asynchronous requests
         const user = this.cacheGetUser(uid);
         if (user) {
             return user; // Promise.resolve(user)
@@ -683,7 +673,7 @@ export class Topic {
      * Get description of the p2p peer from subscription cache.
      */
     p2pPeerDesc() {
-        if (this.getType() !== 'p2p') {
+        if (!this.isP2P()) {
             return undefined;
         }
         return this.users[this.name];
@@ -691,18 +681,17 @@ export class Topic {
 
     /**
      * Iterate over cached subscribers. If callback is undefined, use this.onMetaSub.
-     * @param callback - Callback which will receive subscribers one by one.
-     * @param context - Value of `this` inside the `callback`.
      */
-    subscribers(callback, context) {
-        const cb = (callback || this.onMetaSub);
-        if (cb) {
-            for (const idx in this.users) {
-                if (idx) {
-                    cb.call(context, this.users[idx], idx, this.users);
-                }
-            }
-        }
+    getSubscribers(): any[] {
+        return this.users;
+    }
+
+    /**
+     * Get cached subscription for the given user ID.
+     * @param uid - id of the user to query for
+     */
+    subscriber(uid: string) {
+        return this.users[uid];
     }
 
     /**
@@ -714,11 +703,33 @@ export class Topic {
     }
 
     /**
-     * Get cached subscription for the given user ID.
-     * @param uid - id of the user to query for
+     * Check if topic is a p2p topic.
      */
-    subscriber(uid: string) {
-        return this.users[uid];
+    isP2P() {
+        return this.getType() === 'p2p';
+    }
+
+    /**
+     * Update message's seqId.
+     * @param msg - message packet.
+     * @param newSeqId - new seq id for
+     */
+    swapMessageId(msg: Message, newSeqId: number) {
+        const idx = this.messages.find({
+            seq: msg.seq
+        }, true);
+
+        const numMessages = this.messages.length();
+        msg.seq = newSeqId;
+        if (0 <= idx && idx < numMessages) {
+            if (
+                (idx > 0 && this.messages.getAt(idx - 1).seq >= newSeqId) ||
+                (idx + 1 < numMessages && this.messages.getAt(idx + 1).seq <= newSeqId)
+            ) {
+                this.messages.delAt(idx);
+                this.messages.put(msg);
+            }
+        }
     }
 
     /**
@@ -1072,7 +1083,7 @@ export class Topic {
      * Called by 'me' topic on contact update (desc.noForwarding is true).
      * @param desc - Desc packet
      */
-    processMetaDesc(desc: any) {
+    processMetaDesc(desc: SetDesc) {
         // Synthetic desc may include defacs for p2p topics which is useless.
         // Remove it.
         if (this.getType() === 'p2p') {
@@ -1112,7 +1123,7 @@ export class Topic {
      * {ctrl} after setMeta-sub.
      * @param subs Subscriptions
      */
-    processMetaSub(subs: any) {
+    processMetaSub(subs: SetSub[]) {
         for (const idx in subs) {
             if (idx) {
                 const sub = subs[idx];
@@ -1196,7 +1207,7 @@ export class Topic {
     /**
      * Reset subscribed state
      */
-    resetSub() {
+    resetSub(): void {
         this.subscribed = false;
     }
 
@@ -1342,10 +1353,8 @@ export class Topic {
 
 
     // Do nothing for topics other than 'me'
-    processMetaCreds(creds: any, b?) { }
     cacheGetUser(userId: string): any { }
     cachePutUser(a, b) { }
     cacheDelUser(a) { }
-    cachePutSelf() { }
     cacheDelSelf() { }
 }

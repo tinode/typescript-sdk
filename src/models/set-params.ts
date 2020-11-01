@@ -7,6 +7,10 @@ export interface SetDesc {
     acs?: any;
     updated?: any;
     noForwarding?: boolean;
+    seq?: number;
+    read?: any;
+    recv?: any;
+    touched?: any;
 }
 
 export interface SetSub {
@@ -17,6 +21,7 @@ export interface SetSub {
     topic?: string;
     acs?: any;
     updated?: any;
+    deleted?: any;
 }
 
 export interface SetParams {

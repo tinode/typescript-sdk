@@ -300,7 +300,7 @@ export class Tinode {
      * @param type - cache type
      * @param name - cache name
      */
-    private cacheDel(type: string, name: string): void {
+    cacheDel(type: string, name: string): void {
         delete this.cache[type + ':' + name];
     }
 

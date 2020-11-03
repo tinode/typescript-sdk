@@ -1,7 +1,18 @@
 import { base64codes, base64abc, DEL_CHAR, AppInfo, TopicTypesObj, TopicNames } from './constants';
-import { AccessMode } from './access-mode';
 import { PacketTypes, Packet } from './models/packet';
-import { HiPacketData, AccPacketData, LoginPacketData, SubPacketData, LeavePacketData, PubPacketData, GetPacketData, SetPacketData, DelPacketData, NotePacketData } from './models/packet-data';
+import { AccessMode } from './access-mode';
+import {
+    HiPacketData,
+    AccPacketData,
+    SubPacketData,
+    PubPacketData,
+    GetPacketData,
+    SetPacketData,
+    DelPacketData,
+    NotePacketData,
+    LoginPacketData,
+    LeavePacketData,
+} from './models/packet-data';
 
 function getBase64Code(charCode: number) {
     if (charCode >= base64codes.length) {

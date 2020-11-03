@@ -15,7 +15,9 @@ export enum TopicNames {
     TOPIC_ME = 'me',
     TOPIC_FND = 'fnd',
     TOPIC_SYS = 'sys',
-    USER_NEW = 'new'
+    USER_NEW = 'new',
+    TOPIC_CHAN = 'chn',
+    TOPIC_NEW_CHAN = 'nch',
 }
 
 export enum MessageStatus {

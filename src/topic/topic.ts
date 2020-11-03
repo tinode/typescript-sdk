@@ -1,7 +1,7 @@
+import { normalizeArray, mergeObj, stringToDate, mergeToCache, isChannelTopicName } from '../utilities';
 import { AppSettings, DEL_CHAR, MessageStatus, AccessModeFlags, TopicNames } from '../constants';
-import { normalizeArray, mergeObj, stringToDate, mergeToCache } from '../utilities';
-import { MetaGetBuilder } from '../meta-get-builder';
 import { SetDesc, SetParams, SetSub } from '../models/set-params';
+import { MetaGetBuilder } from '../meta-get-builder';
 import { GetQuery } from '../models/get-query';
 import { DelRange } from '../models/del-range';
 import { AccessMode } from '../access-mode';
@@ -114,7 +114,12 @@ export class Topic {
     onAllMessagesReceived = new Subject<any>();
 
     // Cache related callbacks will be set by tinode class
+    cacheDelSelf: () => void = () => { };
     cachePutSelf: () => void = () => { };
+    cacheGetUser: (userId: string) => any = (userId: string) => { };
+    cacheDelUser: (userId: string) => any = (userId: string) => { };
+    cachePutUser: (userId: string, cached: any) => void = (userId: string, cached: any) => { };
+
     // Do nothing for topics other than 'me'
     processMetaCreds: (creds: any[], update?: boolean) => void = (creds, update) => { };
 
@@ -703,67 +708,29 @@ export class Topic {
     }
 
     /**
-     * Check if topic is a p2p topic.
-     */
-    isP2P() {
-        return this.getType() === 'p2p';
-    }
-
-    /**
-     * Update message's seqId.
-     * @param msg - message packet.
-     * @param newSeqId - new seq id for
-     */
-    swapMessageId(msg: Message, newSeqId: number) {
-        const idx = this.messages.find({
-            seq: msg.seq
-        }, true);
-
-        const numMessages = this.messages.length();
-        msg.seq = newSeqId;
-        if (0 <= idx && idx < numMessages) {
-            if (
-                (idx > 0 && this.messages.getAt(idx - 1).seq >= newSeqId) ||
-                (idx + 1 < numMessages && this.messages.getAt(idx + 1).seq <= newSeqId)
-            ) {
-                this.messages.delAt(idx);
-                this.messages.put(msg);
-            }
-        }
-    }
-
-    /**
-     * Iterate over cached messages. If callback is undefined, use this.onData.
-     * @param callback - Callback which will receive messages one by one.
+     * Get cached messages
      * @param sinceId - Optional seqId to start iterating from (inclusive)
-     * @param beforeId - Optional seqId to stop iterating before (exclusive).
-     * @param context - Value of `this` inside the `callback`.
+     * @param beforeId - Optional seqId to stop iterating before (exclusive).`.
      */
-    getMessages(callback: any, sinceId?: number, beforeId?: number, context?: any) {
-        const cb = (callback || this.onData);
-        if (cb) {
-            const startIdx = typeof sinceId === 'number' ? this.messages.find({
-                seq: sinceId
-            }, true) : undefined;
-            const beforeIdx = typeof beforeId === 'number' ? this.messages.find({
-                seq: beforeId
-            }, true) : undefined;
-            if (startIdx !== -1 && beforeIdx !== -1) {
-                this.messages.forEach(cb, startIdx, beforeIdx, context);
-            }
+    getMessages(sinceId?: number, beforeId?: number) {
+        const startIdx = typeof sinceId === 'number' ? this.messages.find({
+            seq: sinceId
+        }, true) : undefined;
+        const beforeIdx = typeof beforeId === 'number' ? this.messages.find({
+            seq: beforeId
+        }, true) : undefined;
+        if (startIdx !== -1 && beforeIdx !== -1) {
+            const temp = [];
+            this.messages.forEach((value) => temp.push(value), startIdx, beforeIdx);
+            return temp;
         }
     }
 
     /**
-     * Iterate over cached unsent messages.
-     * @param callback - Callback which will receive messages one by one.
-     * @param context - Value of `this` inside the `callback`.
+     * Get cached unsent messages.
      */
-    queuedMessages(callback: any, context?: any) {
-        if (!callback) {
-            throw new Error('Callback must be provided');
-        }
-        this.getMessages(callback, AppSettings.LOCAL_SEQ_ID, undefined, context);
+    queuedMessages(): any[] {
+        return this.getMessages(AppSettings.LOCAL_SEQ_ID);
     }
 
     /**
@@ -836,6 +803,29 @@ export class Topic {
     }
 
     /**
+     * Update message's seqId.
+     * @param msg - message packet.
+     * @param newSeqId - new seq id for
+     */
+    swapMessageId(msg: Message, newSeqId: number) {
+        const idx = this.messages.find({
+            seq: msg.seq
+        }, true);
+
+        const numMessages = this.messages.length();
+        msg.seq = newSeqId;
+        if (0 <= idx && idx < numMessages) {
+            if (
+                (idx > 0 && this.messages.getAt(idx - 1).seq >= newSeqId) ||
+                (idx + 1 < numMessages && this.messages.getAt(idx + 1).seq <= newSeqId)
+            ) {
+                this.messages.delAt(idx);
+                this.messages.put(msg);
+            }
+        }
+    }
+
+    /**
      * Remove a range of messages from the local cache.
      * @param fromId seq ID of the first message to remove (inclusive).
      * @param untilId seqID of the last message to remove (exclusive).
@@ -899,6 +889,27 @@ export class Topic {
      */
     isArchived() {
         return this.private && this.private.arch ? true : false;
+    }
+
+    /**
+     * Check if topic is a channel.
+     */
+    isChannel() {
+        return isChannelTopicName(this.name);
+    }
+
+    /**
+     * Check if topic is a group topic.
+     */
+    isGroup() {
+        return this.getType() === 'grp';
+    }
+
+    /**
+     * Check if topic is a p2p topic.
+     */
+    isP2P() {
+        return this.getType() === 'p2p';
     }
 
     /**
@@ -966,7 +977,6 @@ export class Topic {
 
     /**
      * Process metadata message
-     * TODO determine input value type
      */
     routeMeta(meta: any) {
         if (meta.desc) {
@@ -1350,11 +1360,4 @@ export class Topic {
             this.messages.put(gap);
         });
     }
-
-
-    // Do nothing for topics other than 'me'
-    cacheGetUser(userId: string): any { }
-    cachePutUser(a, b) { }
-    cacheDelUser(a) { }
-    cacheDelSelf() { }
 }

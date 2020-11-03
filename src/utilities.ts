@@ -616,3 +616,12 @@ export function initPacket(type: PacketTypes, topicName?: string): Packet<any> {
             throw new Error('Unknown packet type requested: ' + type);
     }
 }
+
+/**
+ * Check if the topic name is a name of a channel.
+ * @param name Topic name
+ */
+export function isChannelTopicName(name: string) {
+    return (typeof name === 'string') &&
+        (name.substring(0, 3) === TopicNames.TOPIC_CHAN || name.substring(0, 3) === TopicNames.TOPIC_NEW_CHAN);
+}

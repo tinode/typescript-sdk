@@ -267,7 +267,7 @@ export class AccessMode {
      * Check if Presence (P) flag is set.
      * @param side - which permission to check: given, want, mode; default: mode.
      */
-    isPresencer(side: string): boolean {
+    isPresencer(side?: string): boolean {
         return AccessMode.checkFlag(this, side, AccessModeFlags.PRES);
     }
 

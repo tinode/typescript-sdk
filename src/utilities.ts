@@ -636,3 +636,11 @@ export function isChannelTopicName(name: string) {
     return (typeof name === 'string') &&
         (name.substring(0, 3) === TopicNames.TOPIC_CHAN || name.substring(0, 3) === TopicNames.TOPIC_NEW_CHAN);
 }
+
+/**
+ * Check if the topic name is a p2p topic name.
+ * @param name Topic name
+ */
+export function isP2PTopicName(name: string) {
+    return (typeof name === 'string') && name.substring(0, 3) === 'p2p';
+}

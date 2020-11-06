@@ -55,7 +55,7 @@ export class Topic {
     /**
      * Access mode, see AccessMode
      */
-    private acs = new AccessMode(null);
+    protected acs = new AccessMode(null);
     /**
      * Current value of locally issued seqId, used for pending messages.
      */

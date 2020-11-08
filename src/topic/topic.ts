@@ -31,11 +31,11 @@ export class Topic {
     /**
      * Credentials such as email or phone number
      */
-    private credentials = [];
+    protected credentials = [];
     /**
      * Boolean, true if the topic is currently live
      */
-    private subscribed = false;
+    protected subscribed = false;
     /**
      * Timestamp when the topic was created
      */

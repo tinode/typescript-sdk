@@ -1,11 +1,12 @@
 import { isP2PTopicName, mergeObj, mergeToCache, stringToDate } from '../utilities';
-import { TopicNames } from '../constants';
+import { AccessModeFlags, DEL_CHAR, TopicNames } from '../constants';
 import { Tinode } from '../tinode';
 import { Topic } from './topic';
 import { Subject } from 'rxjs';
+import { AccessMode } from '../access-mode';
 
 export interface ContactUpdateData {
-    status: any;
+    what: any;
     contact: any;
 }
 
@@ -54,7 +55,7 @@ export class TopicMe extends Topic {
                         this.onContactUpdate.next();
                         if (this.onContactUpdate) {
                             this.onContactUpdate.next({
-                                status: 'off',
+                                what: 'off',
                                 contact: cont,
                             });
                         }
@@ -66,6 +67,7 @@ export class TopicMe extends Topic {
         this.onMetaDesc.next(this);
     }
 
+    // Override the original Topic.processMetaSub
     processMetaSub(subs: any) {
         for (const key in subs) {
             if (Object.prototype.hasOwnProperty.call(subs, key)) {
@@ -119,7 +121,193 @@ export class TopicMe extends Topic {
         }
     }
 
+    /**
+     * Called by Tinode when meta.sub is received.
+     */
+    processMetaCreds = (creds: any[], upd: boolean) => {
+        if (creds.length === 1 && creds[0] === DEL_CHAR) {
+            creds = [];
+        }
+        if (upd) {
+            creds.forEach((cr) => {
+                if (cr.val) {
+                    // Adding a credential.
+                    let idx = this.credentials.findIndex((el) => {
+                        return el.meth === cr.meth && el.val === cr.val;
+                    });
+                    if (idx < 0) {
+                        // Not found.
+                        if (!cr.done) {
+                            // Unconfirmed credential replaces previous unconfirmed credential of the same method.
+                            idx = this.credentials.findIndex((el) => {
+                                return el.meth === cr.meth && !el.done;
+                            });
+                            if (idx >= 0) {
+                                // Remove previous unconfirmed credential.
+                                this.credentials.splice(idx, 1);
+                            }
+                        }
+                        this.credentials.push(cr);
+                    } else {
+                        // Found. Maybe change 'done' status.
+                        this.credentials[idx].done = cr.done;
+                    }
+                } else if (cr.resp) {
+                    // Handle credential confirmation.
+                    const idx = this.credentials.findIndex((el) => {
+                        return el.meth === cr.meth && !el.done;
+                    });
+                    if (idx >= 0) {
+                        this.credentials[idx].done = true;
+                    }
+                }
+            });
+        } else {
+            this.credentials = creds;
+        }
+        this.onCredsUpdated.next(this.credentials);
+    }
+
+    routePres(pres: any) {
+        if (pres.what === 'term') {
+            // The 'me' topic itself is detached. Mark as unsubscribed.
+            this.resetSub();
+            return;
+        }
+
+        if (pres.what === 'upd' && pres.src === TopicNames.TOPIC_ME) {
+            // Update to me description. Request updated value.
+            this.getMeta(this.startMetaQuery().withDesc().build());
+            return;
+        }
+
+        const cont = this.contacts[pres.src];
+        if (cont) {
+            switch (pres.what) {
+                case 'on': // topic came online
+                    cont.online = true;
+                    break;
+                case 'off': // topic went offline
+                    if (cont.online) {
+                        cont.online = false;
+                        if (cont.seen) {
+                            cont.seen.when = new Date();
+                        } else {
+                            cont.seen = {
+                                when: new Date()
+                            };
+                        }
+                    }
+                    break;
+                case 'msg': // new message received
+                    cont.touched = new Date();
+                    cont.seq = pres.seq | 0;
+                    // Check if message is sent by the current user. If so it's been read already.
+                    if (!pres.act || this.tinode.isMe(pres.act)) {
+                        cont.read = cont.read ? Math.max(cont.read, cont.seq) : cont.seq;
+                        cont.recv = cont.recv ? Math.max(cont.read, cont.recv) : cont.recv;
+                    }
+                    cont.unread = cont.seq - cont.read;
+                    break;
+                case 'upd': // desc updated
+                    // Request updated subscription.
+                    this.getMeta(this.startMetaQuery().withLaterOneSub(pres.src).build());
+                    break;
+                case 'acs': // access mode changed
+                    if (cont.acs) {
+                        cont.acs.updateAll(pres.dacs);
+                    } else {
+                        cont.acs = new AccessMode().updateAll(pres.dacs);
+                    }
+                    cont.touched = new Date();
+                    break;
+                case 'ua': // user agent changed
+                    cont.seen = {
+                        when: new Date(),
+                        ua: pres.ua
+                    };
+                    break;
+                case 'recv': // user's other session marked some messages as received
+                    pres.seq = pres.seq | 0;
+                    cont.recv = cont.recv ? Math.max(cont.recv, pres.seq) : pres.seq;
+                    break;
+                case 'read': // user's other session marked some messages as read
+                    pres.seq = pres.seq | 0;
+                    cont.read = cont.read ? Math.max(cont.read, pres.seq) : pres.seq;
+                    cont.recv = cont.recv ? Math.max(cont.read, cont.recv) : cont.recv;
+                    cont.unread = cont.seq - cont.read;
+                    break;
+                case 'gone': // topic deleted or unsubscribed from
+                    delete this.contacts[pres.src];
+                    break;
+                case 'del':
+                    // Update topic.del value.
+                    break;
+                default:
+                    this.tinode.logger('INFO: Unsupported presence update in "me"', pres.what);
+            }
+
+            this.onContactUpdate.next({
+                what: pres.what,
+                contact: cont,
+            });
+        } else {
+            if (pres.what === 'acs') {
+                // New subscriptions and deleted/banned subscriptions have full
+                // access mode (no + or - in the dacs string). Changes to known subscriptions are sent as
+                // deltas, but they should not happen here.
+                const acs = new AccessMode(pres.dacs);
+                if (!acs || acs.mode === AccessModeFlags.INVALID) {
+                    this.tinode.logger('ERROR: Invalid access mode update', pres.src, pres.dacs);
+                    return;
+                } else if (acs.mode === AccessModeFlags.NONE) {
+                    this.tinode.logger('WARNING: Removing non-existent subscription', pres.src, pres.dacs);
+                    return;
+                } else {
+                    // New subscription. Send request for the full description.
+                    // Using .withOneSub (not .withLaterOneSub) to make sure IfModifiedSince is not set.
+                    this.getMeta(this.startMetaQuery().withOneSub(undefined, pres.src).build());
+                    // Create a dummy entry to catch online status update.
+                    this.contacts[pres.src] = {
+                        touched: new Date(),
+                        topic: pres.src,
+                        online: false,
+                        acs,
+                    };
+                }
+            } else if (pres.what === 'tags') {
+                this.getMeta(this.startMetaQuery().withTags().build());
+            }
+        }
+
+        this.onPres.next(pres);
+    }
+
+    publish(): Promise<any> {
+        return Promise.reject(new Error('Publishing to "me" is not supported'));
+    }
+
+    async delCredential(method: string, value: string): Promise<any> {
+        if (!this.subscribed) {
+            return Promise.reject(new Error('Cannot delete credential in inactive "me" topic'));
+        }
+        // Send {del} message, return promise
+        const ctrl = this.tinode.delCredential(method, value);
+        const index = this.credentials.findIndex((el) => {
+            return el.meth === method && el.val === value;
+        });
+        if (index > -1) {
+            this.credentials.splice(index, 1);
+        }
+        // Notify listeners
+        this.onCredsUpdated.next(this.credentials);
+        return ctrl;
+    }
+
+    getContacts() {
+        return this.contacts;
+    }
+
     setMsgReadRecv(contactName, what, seq, ts?) { }
     getMsgReadRecv(a, b): number { return 0; }
-    routePres(a) { }
 }

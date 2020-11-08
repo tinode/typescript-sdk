@@ -63,7 +63,7 @@ export class MetaGetBuilder {
      * Add query parameters to fetch topic description if it's newer than the given timestamp.
      * @param ims - fetch messages newer than this timestamp
      */
-    withDesc(ims: Date): MetaGetBuilder {
+    withDesc(ims?: Date): MetaGetBuilder {
         this.what.desc = { ims };
         return this;
     }

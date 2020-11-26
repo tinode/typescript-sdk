@@ -2,6 +2,7 @@ import { normalizeArray, mergeObj, stringToDate, mergeToCache, isChannelTopicNam
 import { AppSettings, DEL_CHAR, MessageStatus, AccessModeFlags, TopicNames } from '../constants';
 import { SetDesc, SetParams, SetSub } from '../models/set-params';
 import { MetaGetBuilder } from '../meta-get-builder';
+import { Credential } from '../models/credential';
 import { GetQuery } from '../models/get-query';
 import { DelRange } from '../models/del-range';
 import { AccessMode } from '../access-mode';
@@ -31,7 +32,7 @@ export class Topic {
     /**
      * Credentials such as email or phone number
      */
-    protected credentials = [];
+    protected credentials: Credential[] = [];
     /**
      * Boolean, true if the topic is currently live
      */

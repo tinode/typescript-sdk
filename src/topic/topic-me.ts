@@ -1,9 +1,10 @@
 import { isP2PTopicName, mergeObj, mergeToCache, stringToDate } from '../utilities';
 import { AccessModeFlags, DEL_CHAR, TopicNames } from '../constants';
+import { Credential } from '../models/credential';
+import { AccessMode } from '../access-mode';
 import { Tinode } from '../tinode';
 import { Topic } from './topic';
 import { Subject } from 'rxjs';
-import { AccessMode } from '../access-mode';
 
 export interface ContactUpdateData {
     what: any;
@@ -20,12 +21,6 @@ export class TopicMe extends Topic {
     constructor(tinode: Tinode) {
         super(TopicNames.TOPIC_ME, tinode);
         this.contacts = {};
-    }
-
-    getContact(a: any): any {
-        return {
-            online: false,
-        };
     }
 
     // Override the original Topic.processMetaDesc
@@ -308,6 +303,118 @@ export class TopicMe extends Topic {
         return this.contacts;
     }
 
-    setMsgReadRecv(contactName, what, seq, ts?) { }
-    getMsgReadRecv(a, b): number { return 0; }
+    /**
+     * Update a cached contact with new read/received/message count.
+     * @param contactName - UID of contact to update.
+     * @param what - Which count to update, one of <tt>"read", "recv", "msg"</tt>
+     * @param seq - New value of the count.
+     * @param ts - Timestamp of the update.
+     */
+    setMsgReadRecv(contactName: string, what: string, seq: number, ts?: Date): void {
+        const cont = this.contacts[contactName];
+        let oldVal = false;
+        let doUpdate = false;
+        if (cont) {
+            seq = seq | 0;
+            cont.seq = cont.seq | 0;
+            cont.read = cont.read | 0;
+            cont.recv = cont.recv | 0;
+            switch (what) {
+                case 'recv':
+                    oldVal = cont.recv;
+                    cont.recv = Math.max(cont.recv, seq);
+                    doUpdate = (oldVal !== cont.recv);
+                    break;
+                case 'read':
+                    oldVal = cont.read;
+                    cont.read = Math.max(cont.read, seq);
+                    doUpdate = (oldVal !== cont.read);
+                    break;
+                case 'msg':
+                    oldVal = cont.seq;
+                    cont.seq = Math.max(cont.seq, seq);
+                    if (!cont.touched || cont.touched < ts) {
+                        cont.touched = ts;
+                    }
+                    doUpdate = (oldVal !== cont.seq);
+                    break;
+            }
+
+            // Sanity checks.
+            if (cont.recv < cont.read) {
+                cont.recv = cont.read;
+                doUpdate = true;
+            }
+            if (cont.seq < cont.recv) {
+                cont.seq = cont.recv;
+                if (!cont.touched || cont.touched < ts) {
+                    cont.touched = ts;
+                }
+                doUpdate = true;
+            }
+            cont.unread = cont.seq - cont.read;
+
+            if (doUpdate && (!cont.acs || !cont.acs.isMuted())) {
+                this.onContactUpdate.next({
+                    what,
+                    contact: cont,
+                });
+            }
+        }
+    }
+
+    /**
+     * Get cached read/received/message count for the given contact.
+     * @param contactName - UID of contact to read.
+     * @param what - Which count to read, one of <tt>"read", "recv", "msg"</tt>
+     */
+    getMsgReadRecv(contactName: string, what: string): number {
+        const cont = this.contacts[contactName];
+        if (cont) {
+            switch (what) {
+                case 'recv':
+                    return cont.recv | 0;
+                case 'read':
+                    return cont.read | 0;
+                case 'msg':
+                    return cont.seq | 0;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Get a contact from cache.
+     * @param name - Name of the contact to get, either a UID (for p2p topics) or a topic name.
+     */
+    getContact(name: string) {
+        return this.contacts[name];
+    }
+
+    /**
+     * Get access mode of a given contact from cache.
+     */
+    getAccessMode(): AccessMode {
+        if (name) {
+            const cont = this.contacts[name];
+            return cont ? cont.acs : null;
+        }
+        return this.acs;
+    }
+
+    /**
+     * Check if contact is archived, i.e. contact.private.arch == true.
+     * @param name - Name of the contact to check archived status, either a UID (for p2p topics) or a topic name.
+     */
+    isContactArchived(name: string): boolean {
+        const cont = this.contacts[name];
+        return cont ? ((cont.private && cont.private.arch) ? true : false) : null;
+    }
+
+    /**
+     * Get the user's credentials: email, phone, etc.
+     */
+    getCredentials(): Credential[] {
+        return this.credentials;
+    }
 }

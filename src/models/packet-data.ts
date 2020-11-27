@@ -1,5 +1,4 @@
-import { AuthenticationScheme } from './auth-scheme';
-import { AppInfo } from '../constants';
+import { AppInfo, AuthenticationScheme } from '../constants';
 
 export interface HiPacketData {
     /**

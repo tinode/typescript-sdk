@@ -20,16 +20,3 @@ export class Packet<T> {
         this.sending = false;
     }
 }
-
-export enum PacketTypes {
-    Hi = 'hi',
-    Acc = 'acc',
-    Login = 'login',
-    Sub = 'sub',
-    Leave = 'leave',
-    Pub = 'pub',
-    Get = 'get',
-    Set = 'set',
-    Del = 'del',
-    Note = 'note',
-}

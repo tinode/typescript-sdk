@@ -1,5 +1,5 @@
-import { makeBaseUrl, NetworkProviders, log } from '../utilities';
 import { ConnectionOptions } from './models/connection-options';
+import { NetworkProviders, Utilities } from '../utilities';
 import { AppSettings } from '../constants';
 import { Connection } from './models';
 
@@ -33,8 +33,8 @@ export class WSConnection extends Connection {
         }
 
         return new Promise((resolve, reject) => {
-            const url = makeBaseUrl(this.config.host, this.config.secure ? 'wss' : 'ws', this.config.APIKey);
-            log('Connecting to: ', url);
+            const url = Utilities.makeBaseUrl(this.config.host, this.config.secure ? 'wss' : 'ws', this.config.APIKey);
+            Utilities.log('Connecting to: ', url);
             const conn: WebSocket = new NetworkProviders.WebSocket(url);
 
             conn.onerror = (err) => {

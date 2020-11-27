@@ -138,3 +138,23 @@ export enum ServerConfigurationKeys {
     MaxTagCount = 'maxTagCount',
     MaxFileUploadSize = 'maxFileUploadSize',
 }
+
+export enum PacketTypes {
+    Hi = 'hi',
+    Acc = 'acc',
+    Login = 'login',
+    Sub = 'sub',
+    Leave = 'leave',
+    Pub = 'pub',
+    Get = 'get',
+    Set = 'set',
+    Del = 'del',
+    Note = 'note',
+}
+
+export enum AuthenticationScheme {
+    Basic = 'basic',
+    Anonymous = 'anonymous',
+    Token = 'token',
+    Reset = 'reset',
+}

@@ -1,4 +1,4 @@
-import { insertSorted, findNearest } from './utilities';
+import { Utilities } from './utilities';
 
 /**
  * In-memory sorted cache of objects.
@@ -41,7 +41,7 @@ export class CBuffer {
     }
     for (const key in insert) {
       if (Object.prototype.hasOwnProperty.call(insert, key)) {
-        insertSorted(insert[key], this.buffer, this.unique, this.compare);
+        Utilities.insertSorted(insert[key], this.buffer, this.unique, this.compare);
       }
     }
   }
@@ -104,7 +104,7 @@ export class CBuffer {
   find(elem: any, nearest?: boolean): number {
     const {
       idx
-    } = findNearest(elem, this.buffer, !nearest);
+    } = Utilities.findNearest(elem, this.buffer, !nearest);
     return idx;
   }
 }

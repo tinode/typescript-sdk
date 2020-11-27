@@ -1,4 +1,4 @@
-import { jsonParseHelper, NetworkProviders } from './utilities';
+import { Utilities, NetworkProviders } from './utilities';
 import { AuthToken } from './models/auth-token';
 import { AppInfo } from './constants';
 import { Tinode } from './tinode';
@@ -65,7 +65,7 @@ export class LargeFileHelper {
             const temp: any = this;
             let pkt: any;
             try {
-                pkt = JSON.parse(temp.response, jsonParseHelper);
+                pkt = JSON.parse(temp.response, Utilities.jsonParseHelper);
             } catch (err) {
                 this.tinode.logger('ERROR: Invalid server response in LargeFileHelper', temp.response);
                 pkt = {
@@ -178,7 +178,7 @@ export class LargeFileHelper {
                 reader.onload = () => {
                     const tempOnload: any = this;
                     try {
-                        const pkt = JSON.parse(tempOnload.result, jsonParseHelper);
+                        const pkt = JSON.parse(tempOnload.result, Utilities.jsonParseHelper);
                         instance.toReject(new Error(pkt.ctrl.text + ' (' + pkt.ctrl.code + ')'));
                     } catch (err) {
                         instance.tinode.logger('ERROR: Invalid server response in LargeFileHelper', tempOnload.result);

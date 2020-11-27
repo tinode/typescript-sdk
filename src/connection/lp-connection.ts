@@ -1,5 +1,5 @@
-import { makeBaseUrl, log, NetworkProviders, jsonParseHelper } from '../utilities';
 import { ConnectionOptions } from './models/connection-options';
+import { NetworkProviders, Utilities } from '../utilities';
 import { XDRStatus, AppSettings } from '../constants';
 import { Connection } from './models';
 
@@ -34,8 +34,8 @@ export class LPConnection extends Connection {
         }
 
         return new Promise((resolve, reject) => {
-            const url = makeBaseUrl(this.config.host, this.config.secure ? 'https' : 'http', this.config.APIKey);
-            log('Connecting to: ', url);
+            const url = Utilities.makeBaseUrl(this.config.host, this.config.secure ? 'https' : 'http', this.config.APIKey);
+            Utilities.log('Connecting to: ', url);
             this.poller = this.LPPoller(url, resolve, reject);
             this.poller.send(null);
         }).catch((err) => {
@@ -56,7 +56,7 @@ export class LPConnection extends Connection {
         poller.onreadystatechange = (evt: any) => {
             if (poller.readyState === XDRStatus.DONE) {
                 if (poller.status === 201) { // 201 == HTTP.Created, get SID
-                    const pkt = JSON.parse(poller.responseText, jsonParseHelper);
+                    const pkt = JSON.parse(poller.responseText, Utilities.jsonParseHelper);
                     this.LP_URL = url + '&sid=' + pkt.ctrl.params.sid;
                     poller = this.LPPoller(this.LP_URL);
                     poller.send(null);

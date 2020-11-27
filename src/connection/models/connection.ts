@@ -1,6 +1,6 @@
 import { AutoReconnectData, OnDisconnetData } from './event-types';
+import { Utilities, NetworkProviders } from '../../utilities';
 import { ConnectionOptions } from './connection-options';
-import { log, NetworkProviders } from '../../utilities';
 import { BackoffSettings } from './backoff-settings';
 import { Transport } from './transport';
 import { Subject } from 'rxjs';
@@ -88,7 +88,7 @@ export abstract class Connection {
         this.onAutoReconnectIteration.next({ timeout });
 
         this.boffTimer = setTimeout(() => {
-            log('Reconnecting, iter=' + this.boffIteration + ', timeout=' + timeout);
+            Utilities.log('Reconnecting, iter=' + this.boffIteration + ', timeout=' + timeout);
             // Maybe the socket was closed while we waited for the timer?
             if (!this.boffClosed) {
                 const prom = this.connect();

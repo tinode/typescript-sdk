@@ -1,8 +1,8 @@
-import { mergeToCache } from '../utilities';
+import { SetParams } from '../models/set-params';
 import { TopicNames } from '../constants';
+import { Utilities } from '../utilities';
 import { Tinode } from '../tinode';
 import { Topic } from './topic';
-import { SetParams } from '../models/set-params';
 
 export class TopicFnd extends Topic {
     // List of contacts
@@ -26,7 +26,7 @@ export class TopicFnd extends Topic {
                     sub.seen.when = new Date(sub.seen.when);
                 }
 
-                sub = mergeToCache(this.contacts, indexBy, sub);
+                sub = Utilities.mergeToCache(this.contacts, indexBy, sub);
                 updateCount++;
 
                 if (this.onMetaSub) {

@@ -1,13 +1,21 @@
 {
+    "compileOnSave": true,
     "compilerOptions": {
+        "emitDecoratorMetadata": true,
+        "experimentalDecorators": true,
+        "lib": [
+            "es6",
+            "dom"
+        ],
+        "declaration": true,
         "module": "commonjs",
-        "esModuleInterop": true,
-        "target": "es6",
-        "moduleResolution": "node",
-        "sourceMap": true,
-        "outDir": "dist"
+        "noEmitOnError": true,
+        "noImplicitAny": false,
+        "outDir": "dist/lib",
+        "removeComments": false,
+        "target": "es6"
     },
-    "lib": [
-        "es2015"
+    "include": [
+        "src"
     ]
 }

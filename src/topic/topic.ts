@@ -1,4 +1,3 @@
-import { normalizeArray, mergeObj, stringToDate, mergeToCache, isChannelTopicName } from '../utilities';
 import { AppSettings, DEL_CHAR, MessageStatus, AccessModeFlags, TopicNames } from '../constants';
 import { SetDesc, SetParams, SetSub } from '../models/set-params';
 import { MetaGetBuilder } from '../meta-get-builder';
@@ -6,6 +5,7 @@ import { Credential } from '../models/credential';
 import { GetQuery } from '../models/get-query';
 import { DelRange } from '../models/del-range';
 import { AccessMode } from '../access-mode';
+import { Utilities } from '../utilities';
 import { CBuffer } from '../cbuffer';
 import { Message } from '../message';
 import { Tinode } from '../tinode';
@@ -351,7 +351,7 @@ export class Topic {
      */
     async setMeta(params: SetParams) {
         if (params.tags) {
-            params.tags = normalizeArray(params.tags);
+            params.tags = Utilities.normalizeArray(params.tags);
         }
 
         // Send Set message, handle async response.
@@ -896,7 +896,7 @@ export class Topic {
      * Check if topic is a channel.
      */
     isChannel() {
-        return isChannelTopicName(this.name);
+        return Utilities.isChannelTopicName(this.name);
     }
 
     /**
@@ -1102,9 +1102,9 @@ export class Topic {
         }
 
         // Copy parameters from desc object to this topic.
-        mergeObj(this, desc);
+        Utilities.mergeObj(this, desc);
         // Make sure date fields are Date().
-        stringToDate(this);
+        Utilities.stringToDate(this);
 
         // Update relevant contact in the me topic, if available:
         if (this.name !== TopicNames.TOPIC_ME && !desc.noForwarding) {
@@ -1257,11 +1257,11 @@ export class Topic {
         // Fetch user object from the global cache.
         // This is a clone of the stored object
         let cached = this.cacheGetUser(userId);
-        cached = mergeObj(cached || {}, obj);
+        cached = Utilities.mergeObj(cached || {}, obj);
         // Save to global cache
         this.cachePutUser(userId, cached);
         // Save to the list of topic subscribers.
-        return mergeToCache(this.users, userId, cached);
+        return Utilities.mergeToCache(this.users, userId, cached);
     }
 
     /**

@@ -8,7 +8,7 @@ export class AccessMode {
     private want: number;
     mode: number;
 
-    constructor(acs?) {
+    constructor(acs?: any) {
         if (acs) {
             this.given = typeof acs.given === 'number' ? acs.given : AccessMode.decode(acs.given);
             this.want = typeof acs.want === 'number' ? acs.want : AccessMode.decode(acs.want);

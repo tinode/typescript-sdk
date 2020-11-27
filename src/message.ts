@@ -1,8 +1,8 @@
-import { Packet, PacketTypes } from './models/packet';
+import { MessageStatus, PacketTypes } from './constants';
 import { PubPacketData } from './models/packet-data';
-import { MessageStatus } from './constants';
-import { initPacket } from './utilities';
+import { Packet } from './packet';
 import { Drafty } from './drafty';
+import { Tinode } from './tinode';
 import { Subject } from 'rxjs';
 
 export class Message {
@@ -53,8 +53,8 @@ export class Message {
     /**
      * Create a pub packet using this message data
      */
-    getPubPacket(): Packet<PubPacketData> {
-        const pkt: Packet<PubPacketData> = initPacket(PacketTypes.Pub, this.topicName);
+    getPubPacket(tinode: Tinode): Packet<PubPacketData> {
+        const pkt: Packet<PubPacketData> = tinode.initPacket(PacketTypes.Pub, this.topicName);
         const dft = typeof this.content === 'string' ? Drafty.parse(this.content) : this.content;
         pkt.data.content = this.content;
         pkt.data.noecho = !this.echo;

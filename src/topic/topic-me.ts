@@ -1,7 +1,7 @@
-import { isP2PTopicName, mergeObj, mergeToCache, stringToDate } from '../utilities';
 import { AccessModeFlags, DEL_CHAR, TopicNames } from '../constants';
 import { Credential } from '../models/credential';
 import { AccessMode } from '../access-mode';
+import { Utilities } from '../utilities';
 import { Tinode } from '../tinode';
 import { Topic } from './topic';
 import { Subject } from 'rxjs';
@@ -29,9 +29,9 @@ export class TopicMe extends Topic {
         const turnOff = (desc.acs && !desc.acs.isPresencer()) && (this.acs && this.acs.isPresencer());
 
         // Copy parameters from desc object to this topic.
-        mergeObj(this, desc);
+        Utilities.mergeObj(this, desc);
         // String date-time headers to Date() objects.
-        stringToDate(this);
+        Utilities.stringToDate(this);
 
         // 'P' permission was removed. All topics are offline now.
         if (turnOff) {
@@ -94,9 +94,9 @@ export class TopicMe extends Topic {
                     if (sub.seen && sub.seen.when) {
                         sub.seen.when = new Date(sub.seen.when);
                     }
-                    cont = mergeToCache(this.contacts, topicName, sub);
+                    cont = Utilities.mergeToCache(this.contacts, topicName, sub);
 
-                    if (isP2PTopicName(topicName)) {
+                    if (Utilities.isP2PTopicName(topicName)) {
                         this.cachePutUser(topicName, cont);
                     }
 

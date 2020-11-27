@@ -108,7 +108,7 @@ export const NetworkProviders = {
  * @param ws - WebSocket
  * @param xmlhttprequest - XMLHttpRequest
  */
-export function initializeNetworkProviders(ws: any, xmlhttprequest: any): void {
+export function initializeNetworkProviders(ws?: any, xmlhttprequest?: any): void {
     if (!ws && !xmlhttprequest) {
         if (typeof WebSocket !== 'undefined') {
             NetworkProviders.WebSocket = WebSocket;

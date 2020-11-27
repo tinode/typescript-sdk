@@ -33,7 +33,7 @@ export class Message {
     /**
      * Current message status
      */
-    status: MessageStatus;
+    status: MessageStatus = MessageStatus.NONE;
     /**
      * Used to avoid message duplication when retrying failed publish
      */
@@ -43,9 +43,9 @@ export class Message {
     // Events
     onStatusChange = new Subject<MessageStatus>();
 
-    constructor(topicName: string, data: any, echo: boolean = true) {
+    constructor(topicName: string, content: any, echo: boolean = true) {
         this.echo = echo;
-        this.content = data;
+        this.content = content;
         this.topicName = topicName;
         this.status = MessageStatus.NONE;
     }

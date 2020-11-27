@@ -41,7 +41,7 @@ export class Tinode {
     /**
      * Connection config used to initiate a connection
      */
-    private connectionConfig: ConnectionOptions;
+    connectionConfig: ConnectionOptions;
     /**
      * Client's platform
      */
@@ -85,7 +85,7 @@ export class Tinode {
     /**
      * Token which can be used for login instead of login/password.
      */
-    private authToken: AuthToken = null;
+    authToken: AuthToken = null;
     /**
      * Counter of received packets
      */
@@ -409,7 +409,7 @@ export class Tinode {
     /**
      * Generates unique message IDs
      */
-    private getNextUniqueId(): string {
+    getNextUniqueId(): string {
         return (this.messageId !== 0) ? '' + this.messageId++ : undefined;
     }
 
@@ -1119,17 +1119,17 @@ export class Tinode {
      * @param topicName - Name of the topic to get
      */
     getTopic(topicName: string) {
-        let topic = this.cacheGet('topic', name);
-        if (!topic && name) {
-            if (name === TopicNames.TOPIC_ME) {
-                topic = new TopicMe();
-            } else if (name === TopicNames.TOPIC_FND) {
-                topic = new TopicFnd();
+        let topic = this.cacheGet('topic', topicName);
+        if (!topic && topicName) {
+            if (topicName === TopicNames.TOPIC_ME) {
+                topic = new TopicMe(this);
+            } else if (topicName === TopicNames.TOPIC_FND) {
+                topic = new TopicFnd(this);
             } else {
-                topic = new Topic(name, this);
+                topic = new Topic(topicName, this);
             }
             // topic._new = false;
-            this.cachePut('topic', name, topic);
+            this.cachePut('topic', topicName, topic);
             this.attachCacheToTopic(topic);
         }
         return topic;

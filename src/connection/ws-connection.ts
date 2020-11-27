@@ -35,7 +35,9 @@ export class WSConnection extends Connection {
         return new Promise((resolve, reject) => {
             const url = Utilities.makeBaseUrl(this.config.host, this.config.secure ? 'wss' : 'ws', this.config.APIKey);
             Utilities.log('Connecting to: ', url);
-            const conn: WebSocket = new NetworkProviders.WebSocket(url);
+            const conn: WebSocket = new NetworkProviders.WebSocket(url, {
+                rejectUnauthorized: false,
+            });
 
             conn.onerror = (err) => {
                 reject(err);

@@ -23,3 +23,8 @@ const tinode = require('./dist/lib');
 First copy `package.json` file into `dist/lib` folder. Then in that folder run `npm pack`. This will create a package that can be installed using npm or yarn. The created file will be named `tinode-sdk-x.y.z.tgz`.
 
 Now you can install the package using `npm i tinode-sdk-x.y.z.tgz`.
+
+To use this package in typescript use `import`:
+```ts
+import { Tinode } from 'tinode-sdk';
+```

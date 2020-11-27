@@ -15,7 +15,7 @@ Import the browser script using the html script tag:
 
 ### Javascript
 Import the library using `require`:
-```
+```js
 const tinode = require('./dist/lib');
 ```
 

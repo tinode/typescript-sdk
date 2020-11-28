@@ -6,6 +6,7 @@
   "scripts": {
     "build:browser": "webpack",
     "build:node": "tsc",
+    "docs": "typedoc --out ./documentation ./src --mode file --tsconfig ./tsconfig.json --theme minimal",
     "build": "npm run build:browser && npm run build:node",
     "start": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/my-script.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -35,6 +36,7 @@
     "terser-webpack-plugin": "^5.0.3",
     "ts-node": "^8.10.2",
     "tslint": "^5.20.1",
+    "typedoc": "^0.19.2",
     "typescript": "^3.9.6",
     "webpack": "^5.8.0",
     "webpack-cli": "^4.2.0",

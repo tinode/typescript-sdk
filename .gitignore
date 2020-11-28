@@ -1,6 +1,7 @@
 package-lock.json
 yarn.lock
 dist
+documentation
 node_modules/*
 src/my-script.ts
 .vscode/settings.json

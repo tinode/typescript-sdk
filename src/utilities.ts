@@ -9,8 +9,20 @@ export const NetworkProviders = {
     XMLHTTPRequest: null,
 };
 
+export let CTextDecoder: any;
+export let CTextEncoder: any;
+
+if (typeof TextDecoder === 'undefined') {
+    CTextEncoder = require('util').TextEncoder;
+    CTextDecoder = require('util').TextDecoder;
+} else {
+    CTextDecoder = TextDecoder;
+    CTextEncoder = TextEncoder;
+}
+
+
 export class Utilities {
-    static getBase64Code(charCode: number) {
+    private static getBase64Code(charCode: number) {
         if (charCode >= base64codes.length) {
             throw new Error('Unable to parse base64 string.');
         }
@@ -21,7 +33,7 @@ export class Utilities {
         return code;
     }
 
-    static bytesToBase64(bytes: Uint8Array): string {
+    private static bytesToBase64(bytes: Uint8Array): string {
         const l = bytes.length;
         let result = '';
         let i = 0;
@@ -48,7 +60,7 @@ export class Utilities {
         return result;
     }
 
-    static base64ToBytes(str: string) {
+    private static base64ToBytes(str: string) {
         if (str.length % 4 !== 0) {
             throw new Error('Unable to parse base64 string.');
         }
@@ -78,7 +90,7 @@ export class Utilities {
      * @param str - input string
      * @param encoder - text encoder
      */
-    static base64encode(str: string, encoder = new TextEncoder()): string {
+    static base64encode(str: string, encoder = new CTextEncoder()): string {
         return Utilities.bytesToBase64(encoder.encode(str));
     }
 
@@ -87,7 +99,7 @@ export class Utilities {
      * @param str - input base64
      * @param decoder - text decoder
      */
-    static base64decode(str: string, decoder = new TextDecoder()): string {
+    static base64decode(str: string, decoder = new CTextDecoder()): string {
         return decoder.decode(Utilities.base64ToBytes(str));
     }
 

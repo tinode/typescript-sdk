@@ -35,3 +35,17 @@ test('Should merge objects', () => {
     expect(result.firstName).toBe('Moein');
     expect(result.username).toBe('rxmoein');
 });
+
+test('Should merge object to cache object', () => {
+    const cache: any = { key: { firstName: 'Moein' } };
+    const obj = { username: 'rxmoein' };
+    const result = Utilities.mergeToCache(cache, 'key', obj);
+    expect(result.firstName).toBe('Moein');
+    expect(result.username).toBe('rxmoein');
+});
+
+test('Should convert string to date', () => {
+    const obj: any = { created: '2020-11-30 16:04:26' };
+    Utilities.stringToDate(obj);
+    expect(obj.created instanceof Date).toBeTruthy();
+});

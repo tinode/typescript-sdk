@@ -49,3 +49,32 @@ test('Should convert string to date', () => {
     Utilities.stringToDate(obj);
     expect(obj.created instanceof Date).toBeTruthy();
 });
+
+test('Should jsonBuildHelper convert dates to rfc3339DateString', () => {
+    const obj: any = { created: new Date('2020-11-30 16:04:26') };
+    const str = JSON.stringify(obj, Utilities.jsonBuildHelper);
+    expect(str === '{"created":"2020-11-30T12:34:26.000Z"}').toBeTruthy();
+});
+
+test('Should simplify object', () => {
+    const obj: any = { _key: 'val', key: false, next: true };
+    const simplified = Utilities.simplify(obj);
+    expect(simplified._key).toBeFalsy();
+    expect(simplified.key).toBeFalsy();
+    expect(simplified.next).toBeTruthy();
+});
+
+test('Should simplify object', () => {
+    const obj: any = { _key: 'val', key: false, next: true };
+    const simplified = Utilities.simplify(obj);
+    expect(simplified._key).toBeFalsy();
+    expect(simplified.key).toBeFalsy();
+    expect(simplified.next).toBeTruthy();
+});
+
+test('Should normalize object', () => {
+    const obj: any[] = [undefined, 'a', 'a', 'moein'];
+    const norm = Utilities.normalizeArray(obj);
+    expect(norm.length === 1).toBeTruthy();
+    expect(norm[0] === 'moein').toBeTruthy();
+});

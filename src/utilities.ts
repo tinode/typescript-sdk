@@ -261,7 +261,7 @@ export class Utilities {
      * If the result is an empty array, add a single element "\u2421" (Unicode Del character).
      * @param arr - array value
      */
-    static normalizeArray(arr: any[]) {
+    static normalizeArray(arr: string[]) {
         let out = [];
         if (Array.isArray(arr)) {
             // Trim, throw away very short and empty tags.

@@ -318,12 +318,12 @@ export class Utilities {
     /**
      * Parse browser user agent to extract browser name and version.
      */
-    static getBrowserInfo(ua: string, product) {
+    static getBrowserInfo(ua: string, product: string) {
         ua = ua || '';
-        let reactnative = '';
+        let reactNative = '';
         // Check if this is a ReactNative app.
         if (/reactnative/i.test(product)) {
-            reactnative = 'ReactNative; ';
+            reactNative = 'ReactNative; ';
         }
         // Then test for WebKit based browser.
         ua = ua.replace(' (KHTML, like Gecko)', '');
@@ -396,7 +396,7 @@ export class Utilities {
             const v = m[1].split('.');
             result = m[0] + '/' + v[0] + (v[1] ? '.' + v[1] : '');
         }
-        return reactnative + result;
+        return reactNative + result;
     }
 
     static findNearest(elem, arr: any[], exact: boolean, compare?: CallableFunction) {

@@ -78,3 +78,23 @@ test('Should normalize object', () => {
     expect(norm.length === 1).toBeTruthy();
     expect(norm[0] === 'moein').toBeTruthy();
 });
+
+test('Should jsonParseHelper convert strings dates to date', () => {
+    const src = '{"ts":"2020-11-30T12:34:26.000Z"}';
+    const obj = JSON.parse(src, Utilities.jsonParseHelper);
+    expect(obj.ts instanceof Date).toBeTruthy();
+});
+
+test('Should find nearest element in an array', () => {
+    const src = [1, 2, 3, 2];
+    const obj = Utilities.findNearest(2, src, true);
+    expect(obj.idx === 1).toBeTruthy();
+});
+
+test('Should insert element in sorted array', () => {
+    const src = [1, 3];
+    let obj = Utilities.insertSorted(4, src, true);
+    obj = Utilities.insertSorted(2, obj, true);
+    expect(obj[3] === 4).toBeTruthy();
+    expect(obj[1] === 2).toBeTruthy();
+});

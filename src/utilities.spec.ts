@@ -98,3 +98,41 @@ test('Should insert element in sorted array', () => {
     expect(obj[3] === 4).toBeTruthy();
     expect(obj[1] === 2).toBeTruthy();
 });
+
+test('Should make base url', () => {
+    const url = Utilities.makeBaseUrl('sandbox.tinode.co', 'wss', 'AQEAAAABAAD_rAp4DJh05a1HAwFT3A6K');
+    expect(url === 'wss://sandbox.tinode.co/v0/channels?apikey=AQEAAAABAAD_rAp4DJh05a1HAwFT3A6K').toBeTruthy();
+});
+
+test('Should package account credential', () => {
+    const creds = Utilities.credential('email', 'rxmoein@tuta.io', { a: 'a' }, 'b');
+    expect(creds[0].meth === 'email').toBeTruthy();
+    expect(creds[0].val === 'rxmoein@tuta.io').toBeTruthy();
+    expect(creds[0].params.a === 'a').toBeTruthy();
+    expect(creds[0].resp === 'b').toBeTruthy();
+});
+
+test('Should get topic type credential', () => {
+    const type = Utilities.topicType('usr678dweaf_dsf');
+    expect(type === 'p2p').toBeTruthy();
+});
+
+test('Should detect new topic type', () => {
+    const yes = Utilities.isNewGroupTopicName('new678dweaf_dsf');
+    expect(yes).toBeTruthy();
+});
+
+test('Should detect null value', () => {
+    const yes = Utilities.isNullValue('\u2421');
+    expect(yes).toBeTruthy();
+});
+
+test('Should detect channel topic name', () => {
+    const yes = Utilities.isChannelTopicName('nch8b5ht78_dsfgr8');
+    expect(yes).toBeTruthy();
+});
+
+test('Should detect p2p topic name', () => {
+    const yes = Utilities.isP2PTopicName('p2p678dweaf_dsf');
+    expect(yes).toBeTruthy();
+});

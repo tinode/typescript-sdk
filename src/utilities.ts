@@ -454,7 +454,7 @@ export class Utilities {
     /**
      * Helper function for creating an endpoint URL
      */
-    static makeBaseUrl(host: string, protocol: string, apiKey: string) {
+    static makeBaseUrl(host: string, protocol: 'http' | 'https' | 'ws' | 'wss', apiKey: string) {
         let url = null;
 
         if (protocol === 'http' || protocol === 'https' || protocol === 'ws' || protocol === 'wss') {
@@ -486,7 +486,7 @@ export class Utilities {
      * @param params - validation parameters.
      * @param resp - validation response.
      */
-    static credential(meth: any, val: string, params: object, resp: string) {
+    static credential(meth: any, val: string, params: any, resp: string) {
         if (typeof meth === 'object') {
             ({
                 val,

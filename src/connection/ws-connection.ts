@@ -62,6 +62,7 @@ export class WSConnection extends Connection {
             }).bind(this);
 
             conn.onmessage = ((evt: any) => {
+                console.log('sss');
                 this.onMessage.next(evt.data);
             }).bind(this);
             this.socket = conn;

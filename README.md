@@ -28,3 +28,9 @@ To use this package in typescript use `import`:
 ```ts
 import { Tinode } from 'tinode-sdk';
 ```
+
+## Generate Document
+Run this command:
+```
+npm run docs
+```

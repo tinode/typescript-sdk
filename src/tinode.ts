@@ -8,11 +8,11 @@ import {
     SubPacketData,
     GetPacketData,
     DelPacketData,
+    PubPacketData,
+    SetPacketData,
     NotePacketData,
     LeavePacketData,
     LoginPacketData,
-    PubPacketData,
-    SetPacketData,
 } from './models/packet-data';
 import { Message } from './message';
 import { Topic } from './topic/topic';

@@ -1,3 +1,5 @@
+# UNSUPPORTED.
+
 # Tinode typescript and javascript SDK
 
 This SDK is still under test and it's not released yet. but if you want to use it at this state you can build it yourself for now. this SDK can be used in browser, nodejs and typescript programs and contains needed declarations for each class.

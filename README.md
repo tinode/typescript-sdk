@@ -1,4 +1,4 @@
-# UNSUPPORTED.
+# ABANDONED/UNSUPPORTED
 
 # Tinode typescript and javascript SDK
 

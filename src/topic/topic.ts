@@ -152,7 +152,7 @@ export class Topic {
         // If topic name is explicitly provided, use it. If no name, then it's a new group topic, use "new".
         const ctrl = await this.tinode.subscribe(this.name || TopicNames.TOPIC_NEW, getParams, setParams);
 
-        if (ctrl.code >= 300) {
+        if (ctrl.code >= 400) {
             // Do nothing if the topic is already subscribed to.
             return ctrl;
         }

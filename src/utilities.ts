@@ -185,7 +185,7 @@ export class Utilities {
         for (const prop in src) {
             if (src.hasOwnProperty(prop) &&
                 (!ignore || !ignore[prop]) &&
-                (prop !== '_noForwarding')) {
+                (prop !== 'noForwarding')) {
 
                 dst[prop] = Utilities.mergeObj(dst[prop], src[prop]);
             }

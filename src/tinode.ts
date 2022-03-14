@@ -1335,7 +1335,7 @@ export class Tinode {
      */
     isTopicOnline(topicName: string): boolean {
         const me = this.getMeTopic();
-        const cont = me && me.getContact(name);
+        const cont = me && me.getContact(topicName);
         return cont && cont.online;
     }
 }

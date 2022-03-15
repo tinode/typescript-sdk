@@ -92,7 +92,7 @@ export class CBuffer {
     startIdx = startIdx | 0;
     beforeIdx = beforeIdx || this.buffer.length;
     for (let i = startIdx; i < beforeIdx; i++) {
-      callback(context, this.buffer[i], i);
+      callback.call(context, this.buffer[i], i);
     }
   }
 

@@ -104,8 +104,8 @@ export class TopicMe extends Topic {
                     if (!sub.noForwarding) {
                         const topic = this.tinode.getTopic(topicName);
                         if (topic) {
-                            sub._noForwarding = true;
-                            topic._processMetaDesc(sub);
+                            sub.noForwarding = true;
+                            topic.processMetaDesc(sub);
                         }
                     }
                 }
